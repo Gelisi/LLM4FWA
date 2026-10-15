@@ -11,10 +11,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
-import time
 from pathlib import Path
 
-import requests
+from . import net
 
 AGENT_DIR = Path(__file__).resolve().parent
 
@@ -35,17 +34,17 @@ def load_env() -> dict:
 
 class OpenAICompatClient:
     def __init__(self, api_key: str, base_url: str, model: str, proxy: str | None = None):
+        # proxy 参数保留兼容签名，实际由 agent/net 直连->代理回退接管
         self.api_key, self.base_url, self.model = api_key, base_url.rstrip("/"), model
-        self.proxies = ({"http": proxy, "https": proxy} if proxy else None)
         self.last_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     def chat(self, messages, temperature=0.3, max_tokens=4096) -> str:
-        r = requests.post(
+        r = net.post(
             self.base_url + "/chat/completions",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={"model": self.model, "messages": messages,
                   "temperature": temperature, "max_tokens": max_tokens},
-            timeout=300, proxies=self.proxies)
+            timeout=300)
         r.raise_for_status()
         data = r.json()
         u = data.get("usage") or {}
@@ -62,20 +61,20 @@ class IChatClient:
                  endpoint: str, model: str, proxy: str | None = None):
         self.app_id, self.app_key, self.source = app_id, app_key, source
         self.endpoint, self.model = endpoint, model
-        self.proxies = ({"http": proxy, "https": proxy} if proxy else None)
         self.last_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     def chat(self, messages, temperature=0.3, max_tokens=4096) -> str:
+        import time
         ts = str(int(time.time()))
         sign = hmac.new(self.app_key.encode(),
                         f"x-timestamp: {ts}\nx-source: {self.source}".encode(),
                         hashlib.sha256).hexdigest()
-        r = requests.post(self.endpoint, timeout=300, proxies=self.proxies,
-                          headers={"X-AppID": self.app_id, "X-Source": self.source,
-                                   "X-Timestamp": ts, "X-Authorization": sign,
-                                   "Content-Type": "application/json"},
-                          json={"model": self.model, "messages": messages,
-                                "temperature": temperature, "max_tokens": max_tokens})
+        r = net.post(self.endpoint, timeout=300,
+                     headers={"X-AppID": self.app_id, "X-Source": self.source,
+                              "X-Timestamp": ts, "X-Authorization": sign,
+                              "Content-Type": "application/json"},
+                     json={"model": self.model, "messages": messages,
+                           "temperature": temperature, "max_tokens": max_tokens})
         r.raise_for_status()
         data = r.json()
         u = data.get("usage") or {}

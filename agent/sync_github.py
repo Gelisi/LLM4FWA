@@ -102,16 +102,30 @@ def main():
     if args.no_push:
         print("（--no-push，跳过推送）")
         return 0
-    # 推送：优先用 env 里的 token（github-tokens/GITHUB_TOKEN），避免凭证存在 .git/config
+    # 推送：直连优先；网络失败再走代理。token 优先用 env 里的 github-tokens。
     import os
     url = push_url()
-    push = subprocess.run(["git", "push", url, "main:main"], cwd=str(ROOT),
-                          capture_output=True, text=True,
-                          env={**dict(os.environ), **(env or {})})
-    if push.returncode == 0:
-        print("已推送到 github.com/Gelisi/LLM4FWA (main)")
-        return 0
-    err = push.stderr.strip()
+    base_env = dict(os.environ)
+    if env:
+        base_env.update(env)
+    direct_env = {k: v for k, v in base_env.items()
+                  if k.lower() not in ("http_proxy", "https_proxy", "all_proxy",
+                                       "http_proxy_lower", "https_proxy_lower")}
+    last = None
+    for label, penv in (("直连", direct_env), ("代理", base_env if env else None)):
+        if penv is None:
+            continue
+        push = subprocess.run(["git", "push", url, "main:main"], cwd=str(ROOT),
+                              capture_output=True, text=True, env=penv, timeout=600)
+        if push.returncode == 0:
+            print(f"已推送到 github.com/Gelisi/LLM4FWA (main, {label})")
+            return 0
+        last = push
+        # 认证/权限类错误换网络路径没用，直接停
+        if "403" in push.stderr or "denied" in push.stderr.lower() or \
+                "could not read Username" in push.stderr:
+            break
+    err = (last.stderr if last else "").strip()
     print(f"push 失败: {err[:300]}")
     if "403" in err or "denied" in err.lower():
         print("token 已认证但无写权限：请在 GitHub 给该 token 增加对本仓库的写权限\n"

@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from xml.etree import ElementTree
 
-import requests
+from . import net
 
 ROOT = Path("/mnt/new_gemini/shipengcen/autoresearch")
 
@@ -124,7 +124,7 @@ class ToolBox:
 
     @staticmethod
     def _search_bing(query: str, max_results: int) -> list:
-        r = requests.get("https://www.bing.com/search", params={"q": query, "count": max_results},
+        r = net.get("https://www.bing.com/search", params={"q": query, "count": max_results},
                          headers=_UA, timeout=20)
         r.raise_for_status()
         items = []
@@ -152,8 +152,8 @@ class ToolBox:
 
     @staticmethod
     def _search_ddg(query: str, max_results: int) -> list:
-        r = requests.post("https://html.duckduckgo.com/html/",
-                          data={"q": query}, headers=_UA, timeout=20)
+        r = net.post("https://html.duckduckgo.com/html/",
+                          data={"q": query}, timeout=20)
         r.raise_for_status()
         items = []
         for m in re.finditer(r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>'
@@ -178,7 +178,7 @@ class ToolBox:
         lines = []
         # arXiv
         try:
-            r = requests.get("http://export.arxiv.org/api/query",
+            r = net.get("http://export.arxiv.org/api/query",
                              params={"search_query": f"all:{query}",
                                      "max_results": max_results, "sortBy": "relevance"},
                              headers=_UA, timeout=20)
@@ -194,7 +194,7 @@ class ToolBox:
         # Semantic Scholar（429 退避重试一次）
         for attempt in range(2):
             try:
-                r = requests.get("https://api.semanticscholar.org/graph/v1/paper/search",
+                r = net.get("https://api.semanticscholar.org/graph/v1/paper/search",
                                  params={"query": query, "limit": max_results,
                                          "fields": "title,year,abstract,url,citationCount"},
                                  headers=_UA, timeout=20)
@@ -213,7 +213,7 @@ class ToolBox:
 
     @staticmethod
     def _github_search(query: str, max_results: int = 5) -> str:
-        r = requests.get("https://api.github.com/search/repositories",
+        r = net.get("https://api.github.com/search/repositories",
                          params={"q": query, "per_page": max_results, "sort": "stars"},
                          headers=_UA, timeout=20)
         r.raise_for_status()
@@ -228,7 +228,7 @@ class ToolBox:
     def _web_fetch(url: str, max_chars: int = 8000) -> str:
         if _PRIVATE_RE.match(url.strip()):
             return "拒绝访问内网地址"
-        r = requests.get(url, headers=_UA, timeout=25)
+        r = net.get(url, timeout=25)
         r.raise_for_status()
         text = r.text
         text = re.sub(r"<(script|style|noscript)[^>]*>.*?</\1>", " ", text, flags=re.DOTALL | re.I)
