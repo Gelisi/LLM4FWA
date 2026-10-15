@@ -21,6 +21,25 @@ ROOT = Path(__file__).resolve().parent.parent
 REMOTE = "https://github.com/Gelisi/LLM4FWA.git"
 
 
+def load_env() -> dict:
+    env = {}
+    p = ROOT / "agent" / ".env"
+    if p.exists():
+        for line in p.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, _, v = line.partition("=")
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    return env
+
+
+def push_url() -> str:
+    """带 token 的推送 URL（token 支持 github-tokens / GITHUB_TOKEN / github_token）。"""
+    env = load_env()
+    tok = env.get("github-tokens") or env.get("GITHUB_TOKEN") or env.get("github_token")
+    return f"https://{tok}@github.com/Gelisi/LLM4FWA.git" if tok else REMOTE
+
+
 def git(args: list, check=True) -> subprocess.CompletedProcess:
     r = subprocess.run(["git"] + args, cwd=str(ROOT), capture_output=True, text=True)
     if check and r.returncode != 0:
@@ -34,15 +53,13 @@ def main():
     ap.add_argument("--no-push", action="store_true")
     args = ap.parse_args()
 
-    # 代理（来自 agent/.env 的 AGENT_PROXY）：仅作用于 git 网络命令的环境
-    env = None
-    env_path = ROOT / "agent" / ".env"
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            if line.strip().startswith("AGENT_PROXY="):
-                proxy = line.split("=", 1)[1].strip()
-                env = {"http_proxy": proxy, "https_proxy": proxy,
-                       "http_proxy_lower": proxy, "https_proxy_lower": proxy}
+    # 代理（兼容 AGENT_PROXY 与小写 http_proxy/https_proxy/all_proxy）：
+    # 仅作用于 git 网络命令的环境
+    env = {}
+    e = load_env()
+    proxy = e.get("AGENT_PROXY") or e.get("https_proxy") or e.get("HTTPS_PROXY")
+    if proxy:
+        env = {"http_proxy": proxy, "https_proxy": proxy, "all_proxy": proxy}
 
     if not (ROOT / ".git").exists():
         git(["init", "-b", "main"])
@@ -81,16 +98,22 @@ def main():
     if args.no_push:
         print("（--no-push，跳过推送）")
         return 0
-    push = subprocess.run(["git", "push", "-u", "origin", "main"], cwd=str(ROOT),
+    # 推送：优先用 env 里的 token（github-tokens/GITHUB_TOKEN），避免凭证存在 .git/config
+    import os
+    url = push_url()
+    push = subprocess.run(["git", "push", url, "main:main"], cwd=str(ROOT),
                           capture_output=True, text=True,
-                          env={**dict(__import__("os").environ), **(env or {})})
+                          env={**dict(os.environ), **(env or {})})
     if push.returncode == 0:
         print("已推送到 github.com/Gelisi/LLM4FWA (main)")
         return 0
-    print(f"push 失败: {push.stderr.strip()[:300]}")
-    print("配置凭证（二选一）：\n"
-          "  a) git remote set-url origin https://<PAT>@github.com/Gelisi/LLM4FWA.git\n"
-          "  b) git config credential.helper store 后手动 push 一次输入 token")
+    err = push.stderr.strip()
+    print(f"push 失败: {err[:300]}")
+    if "403" in err or "denied" in err.lower():
+        print("token 已认证但无写权限：请在 GitHub 给该 token 增加对本仓库的写权限\n"
+              "  (classic PAT 勾 repo scope / fine-grained 对本仓库设 Contents: Read and write)")
+    elif "could not read Username" in err or "Authentication" in err:
+        print("缺少凭证：请在 agent/.env 写入 github-tokens=<PAT>")
     return 1
 
 

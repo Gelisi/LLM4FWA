@@ -150,13 +150,14 @@ def main():
         ap.error("需要 --task 或 --goal 之一")
 
     box = ToolBox(CFG)
-    # 代理：AGENT_PROXY 设置后注入进程环境，子进程（git/编译/网络）与 requests
-    # 均自动继承；未设置则直连（当前机器直连可用）。
+    # 代理：兼容 AGENT_PROXY 与小写 http_proxy/https_proxy/all_proxy；注入进程环境后
+    # 子进程（git/编译/网络）与 requests 均自动继承；未设置则直连。
     _env = load_env()
-    if _env.get("AGENT_PROXY"):
-        for k in ("http_proxy", "https_proxy", "all_proxy"):
-            os.environ[k] = _env["AGENT_PROXY"]
-        print(f"[proxy] 已启用 {os.environ['https_proxy']}")
+    _proxy = _env.get("AGENT_PROXY") or _env.get("https_proxy") or _env.get("HTTPS_PROXY")
+    if _proxy:
+        for k in ("http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY"):
+            os.environ[k] = _proxy
+        print(f"[proxy] 已启用 {_proxy}")
     system = build_system_prompt(args.target_rank)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     sess_dir = ROOT / CFG["session_log_dir"]

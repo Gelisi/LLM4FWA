@@ -71,6 +71,12 @@ research_log.md 追加一行。一次只改一个变量；负结果也如实记�
   python3 agent/sync_github.py --message "iter_XXX: <简述进展>"
 代码与文档会提交并推送到 github.com/Gelisi/LLM4FWA（一代一代留痕）。
 
+## GPU 使用纪律（用户硬性要求：不让任何一张卡空太久）
+- 跑任何 GPU 任务前先调 gpu_status 看状态；用 CUDA_VISIBLE_DEVICES=<空闲卡号> 指定；
+- 发现空闲卡（尤其 >30 分钟）必须安排任务：RL 训练（train_policy/PPO）、批量评测批次、
+  或超参扫描——宁可多跑探索性实验也不要让卡闲置；
+- 长任务启动后记录 PID 到 iterations/iter_XXX/RESULTS.md，便于交接与排查。
+
 ## 工具
 {__import__('agent.tools', fromlist=['ToolBox']).ToolBox.spec_text()}
 

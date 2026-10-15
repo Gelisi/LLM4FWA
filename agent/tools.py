@@ -42,6 +42,10 @@ TOOLS_SPEC = [
      "args": {"query": "str", "max_results": "int?"}},
     {"name": "web_fetch", "desc": "抓取网页正文并转纯文本（最多约 8000 字符），配合 web_search 用。",
      "args": {"url": "str"}},
+    {"name": "gpu_status", "desc": "GPU 状态快照（利用率/显存/进程）+ 空闲告警。"
+                                   "跑任何 GPU 任务前先调用；发现空闲卡应安排任务"
+                                   "（CUDA_VISIBLE_DEVICES=<idx> 前缀）。",
+     "args": {}},
     {"name": "finish", "desc": "结束本轮研究会话，写总结。", "args": {"summary": "str"}},
 ]
 
@@ -92,6 +96,9 @@ class ToolBox:
             return self._github_search(args["query"], int(args.get("max_results", 5) or 5))
         if name == "web_fetch":
             return self._web_fetch(args["url"])
+        if name == "gpu_status":
+            from . import gpu
+            return gpu.status_text() + "\n" + gpu.idle_report()
         raise ValueError(f"未知工具: {name}")
 
     # ---------------- 网络工具 ----------------
