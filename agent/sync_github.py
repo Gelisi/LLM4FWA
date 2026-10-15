@@ -87,17 +87,33 @@ def main():
             print("已合并远端 main（保留远端既有文件）" if m.returncode == 0
                   else f"合并失败: {m.stderr.strip()[:200]}")
 
+    ahead = False
+    fetch = subprocess.run(["git", "fetch", "origin", "main"], cwd=str(ROOT),
+                           capture_output=True, text=True, timeout=120)
+    if fetch.returncode == 0:
+        ab = git(["rev-list", "--left-right", "--count", "origin/main...HEAD"],
+                 check=False).stdout.split()
+        if len(ab) == 2 and ab[1] != "0":
+            ahead = True
+    else:
+        # fetch 失败无法对比，保守视为可能有未推送提交（push 对已同步仓库是无害 no-op）
+        ahead = True
+
     git(["add", "-A"])
     r = git(["status", "--porcelain"], check=False)
     if not r.stdout.strip():
-        print("没有待提交的变更")
-        return 0
-    cid = git(["commit", "-m", args.message], check=False)
-    if cid.returncode != 0:
-        print(f"commit 失败: {cid.stderr.strip()[:200]}")
-        return 1
-    sha = git(["rev-parse", "--short", "HEAD"]).stdout.strip()
-    print(f"已提交 {sha}: {args.message}")
+        if ahead:
+            print("没有待提交的变更；本地领先 origin/main，继续推送")
+        else:
+            print("没有待提交的变更，且与 origin/main 同步")
+            return 0
+    else:
+        cid = git(["commit", "-m", args.message], check=False)
+        if cid.returncode != 0:
+            print(f"commit 失败: {cid.stderr.strip()[:200]}")
+            return 1
+        sha = git(["rev-parse", "--short", "HEAD"]).stdout.strip()
+        print(f"已提交 {sha}: {args.message}")
 
     if args.no_push:
         print("（--no-push，跳过推送）")
