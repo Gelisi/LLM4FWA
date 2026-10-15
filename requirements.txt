@@ -1,0 +1,4 @@
+numpy>=2.0
+scipy>=1.10          # mpopt TFWA 依赖（scipy.stats t/chi）
+# 可选（统计检验用）：
+# pip install scipy  即可同时满足两者

@@ -1,0 +1,7 @@
+{"ts": "2026-10-15T14:54:41", "mode": "mock", "session": 0, "task": "mock", "turn": 1, "prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+{"ts": "2026-10-15T14:54:41", "mode": "mock", "session": 0, "task": "mock", "turn": 2, "prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+{"ts": "2026-10-15T14:54:41", "mode": "mock", "session": 0, "task": "mock", "turn": 3, "prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+{"ts": "2026-10-15T14:55:02", "mode": "task", "session": 0, "task": "自检：用 mkdir 和 g++ 在 /tmp 下验证编译工具链可用（g++ --version 即可，不要真的编译大项目），然后 finish 汇报", "turn": 1, "prompt_tokens": 1422, "completion_tokens": 169, "total_tokens": 1591}
+{"ts": "2026-10-15T14:55:07", "mode": "task", "session": 0, "task": "自检：用 mkdir 和 g++ 在 /tmp 下验证编译工具链可用（g++ --version 即可，不要真的编译大项目），然后 finish 汇报", "turn": 2, "prompt_tokens": 2447, "completion_tokens": 83, "total_tokens": 2530}
+{"ts": "2026-10-15T14:55:29", "mode": "task", "session": 0, "task": "自检：用 mkdir 和 g++ 在 /tmp 下验证编译工具链可用（g++ --version 即可，不要真的编译大项目），然后 finish 汇报", "turn": 3, "prompt_tokens": 2320, "completion_tokens": 96, "total_tokens": 2416}
+{"ts": "2026-10-15T14:55:29", "type": "session_summary", "mode": "task", "turns": 3, "tokens": 6537, "finished": true, "summary": "工具链自检通过：在 /tmp/tfwa_toolchain_selfcheck 创建目录成功，g++ --version 返回 GCC 8.5.0。未进行编译，未修改项目文件或研究状态。", "hit_max": false}

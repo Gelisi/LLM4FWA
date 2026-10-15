@@ -1,0 +1,12 @@
+{
+  "algos": ["fwa_rl"],
+  "benchmarks": ["cec2022"],
+  "dims": [10, 20],
+  "functions": null,
+  "runs": 30,
+  "max_evals_override": null,
+  "workers": 24,
+  "tag": "full_c22",
+  "train": false,
+  "_comment": "全量评测模板：CEC2022 D=10/20 全 12 函数 30 runs，MaxFES=20000*D（与基线协议一致）"
+}

@@ -1,0 +1,17 @@
+# 密钥（绝不入库）
+agent/.env
+
+# Python
+__pycache__/
+*.pyc
+
+# 本地会话记录（体积大，留本地）
+agent/sessions/
+
+# 原始 run 数据（本地保留；入库的是汇总报告）
+results/**/traj/
+results/**/run_*.json
+
+# 临时
+*.log
+*.tmp

@@ -1,0 +1,12 @@
+{
+  "algos": ["tfwa", "fwa_rl"],
+  "benchmarks": ["cec2022"],
+  "dims": [10],
+  "functions": [1, 3, 8, 10],
+  "runs": 2,
+  "max_evals_override": 20000,
+  "workers": 8,
+  "tag": "smoke",
+  "train": true,
+  "_comment": "冒烟测试：约 20k evals/run，总 64 个任务，应在 1-2 分钟内完成"
+}
