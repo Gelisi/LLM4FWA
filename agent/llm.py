@@ -19,17 +19,8 @@ AGENT_DIR = Path(__file__).resolve().parent
 
 
 def load_env() -> dict:
-    """加载 agent/.env（存在则覆盖模板默认，不覆盖已有环境变量以外的值）。"""
-    env = {}
-    p = AGENT_DIR / ".env"
-    if not p.exists():
-        return env
-    for line in p.read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, _, v = line.partition("=")
-            env[k.strip()] = v.strip().strip('"').strip("'")
-    return env
+    """读取 agent/.env，兼容 export、引号和行尾注释。"""
+    return net.read_env(AGENT_DIR / ".env")
 
 
 class OpenAICompatClient:

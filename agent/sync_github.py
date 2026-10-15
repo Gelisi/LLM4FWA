@@ -22,15 +22,9 @@ REMOTE = "https://github.com/Gelisi/LLM4FWA.git"
 
 
 def load_env() -> dict:
-    env = {}
-    p = ROOT / "agent" / ".env"
-    if p.exists():
-        for line in p.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
-                env[k.strip()] = v.strip().strip('"').strip("'")
-    return env
+    sys.path.insert(0, str(ROOT))
+    from agent.net import read_env
+    return read_env(ROOT / "agent" / ".env")
 
 
 def push_url() -> str:
@@ -53,17 +47,21 @@ def main():
     ap.add_argument("--no-push", action="store_true")
     args = ap.parse_args()
 
-    # 代理（兼容 AGENT_PROXY 与小写 http_proxy/https_proxy/all_proxy）：
-    # 支持 $var 引用系统环境变量；仅作用于 git 网络命令的环境
     import os
-    env = {}
-    e = load_env()
-    proxy = e.get("AGENT_PROXY") or e.get("https_proxy") or e.get("HTTPS_PROXY")
-    if proxy:
-        if proxy.startswith("$"):
-            proxy = os.environ.get(proxy[1:], "")
-        if proxy:
-            env = {"http_proxy": proxy, "https_proxy": proxy, "all_proxy": proxy}
+    values = load_env()
+    from agent import net
+    net.configure(values)
+    proxies = net.proxy_for_url(REMOTE)
+    if net.network_mode() == "proxy" and not proxies:
+        print("proxy 模式没有 GitHub HTTPS 代理，请配置 https_proxy/all_proxy 或 AGENT_PROXY")
+        return 1
+    env = {f"{key}_proxy": value for key, value in (proxies or {}).items() if key != "no_proxy"}
+    if proxies and proxies.get("no_proxy") and net.network_mode() != "proxy":
+        env["no_proxy"] = proxies["no_proxy"]
+    network_env = {key: value for key, value in os.environ.items()
+                   if key.lower() not in ("http_proxy", "https_proxy", "all_proxy", "no_proxy",
+                                          "http_proxy_lower", "https_proxy_lower")}
+    network_env.update(env)
 
     if not (ROOT / ".git").exists():
         git(["init", "-b", "main"])
@@ -78,7 +76,7 @@ def main():
     if r.returncode != 0:
         fetch = subprocess.run(["git", "fetch", "origin", "main"], cwd=str(ROOT),
                                capture_output=True, text=True,
-                               env={**dict(__import__("os").environ), **(env or {})})
+                               env=network_env)
         if fetch.returncode != 0:
             print(f"fetch 失败（无凭证或网络）: {fetch.stderr.strip()[:200]}")
         else:
@@ -89,7 +87,7 @@ def main():
 
     ahead = False
     fetch = subprocess.run(["git", "fetch", "origin", "main"], cwd=str(ROOT),
-                           capture_output=True, text=True, timeout=120)
+                           capture_output=True, text=True, timeout=120, env=network_env)
     if fetch.returncode == 0:
         ab = git(["rev-list", "--left-right", "--count", "origin/main...HEAD"],
                  check=False).stdout.split()
@@ -118,19 +116,9 @@ def main():
     if args.no_push:
         print("（--no-push，跳过推送）")
         return 0
-    # 推送：直连优先；网络失败再走代理。token 优先用 env 里的 github-tokens。
-    import os
     url = push_url()
-    base_env = dict(os.environ)
-    if env:
-        base_env.update(env)
-    direct_env = {k: v for k, v in base_env.items()
-                  if k.lower() not in ("http_proxy", "https_proxy", "all_proxy",
-                                       "http_proxy_lower", "https_proxy_lower")}
     last = None
-    for label, penv in (("直连", direct_env), ("代理", base_env if env else None)):
-        if penv is None:
-            continue
+    for label, penv in (("代理" if proxies else "直连", network_env),):
         push = subprocess.run(["git", "push", url, "main:main"], cwd=str(ROOT),
                               capture_output=True, text=True, env=penv, timeout=600)
         if push.returncode == 0:

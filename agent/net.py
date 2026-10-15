@@ -1,4 +1,4 @@
-"""统一 HTTP 层：支持 auto（直连后代理）、direct、proxy 三种路由。
+"""统一 HTTP 层：auto 遵循标准代理变量；direct/proxy 显式指定路由。
 
 代理与路由读取 agent/.env 或当前客户端配置，环境变量优先；
 连接超时和响应等待分开，等待期间输出不包含密钥的进度。
@@ -10,6 +10,8 @@
 from __future__ import annotations
 
 import os
+import re
+import shlex
 import threading
 import time
 from contextlib import contextmanager
@@ -23,15 +25,30 @@ _ENV_FILE = Path(__file__).resolve().parent / ".env"
 _CONFIG = None
 
 
-def _load_env_file() -> dict:
+def read_env(path: Path) -> dict:
     env = {}
-    if _ENV_FILE.exists():
-        for line in _ENV_FILE.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
-                env[k.strip()] = v.strip().strip('"').strip("'")
+    if not path.exists():
+        return env
+    for number, line in enumerate(path.read_text().splitlines(), 1):
+        line = line.strip()
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", key):
+            continue
+        try:
+            tokens = shlex.split(value, comments=True, posix=True)
+        except ValueError:
+            raise ValueError(f"{path.name} 第 {number} 行引号不匹配") from None
+        env[key] = " ".join(tokens)
     return env
+
+
+def _load_env_file() -> dict:
+    return read_env(_ENV_FILE)
 
 
 def configure(values: dict):
@@ -51,15 +68,46 @@ def network_mode() -> str:
     return mode
 
 
+def _expand_reference(value, vals, seen=()):
+    match = re.fullmatch(r"\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})", value)
+    if not match:
+        return value
+    name = match.group(1) or match.group(2)
+    if name in seen:
+        raise ValueError("代理变量存在循环引用，请检查 .env")
+    return _expand_reference(vals.get(name, ""), vals, seen + (name,))
+
+
 def resolve_proxy():
     vals = settings()
-    cand = (vals.get("AGENT_PROXY") or vals.get("https_proxy")
-            or vals.get("HTTPS_PROXY") or vals.get("http_proxy") or vals.get("HTTP_PROXY"))
-    if cand:
-        cand = os.path.expandvars(cand)
-        if "$" not in cand:
-            return {"http": cand, "https": cand}
-    return None
+
+    def choose(*keys):
+        candidates = [k for k in keys if k in os.environ] or list(keys)
+        for key in candidates:
+            value = _expand_reference(vals.get(key, ""), vals).strip()
+            if value:
+                return value
+        return ""
+
+    explicit = choose("AGENT_PROXY")
+    proxies = {"http": explicit, "https": explicit} if explicit else {
+        "http": choose("http_proxy", "HTTP_PROXY"),
+        "https": choose("https_proxy", "HTTPS_PROXY"),
+        "all": choose("all_proxy", "ALL_PROXY"),
+    }
+    proxies = {key: value for key, value in proxies.items() if value}
+    bypass = choose("no_proxy", "NO_PROXY")
+    if proxies and bypass:
+        proxies["no_proxy"] = bypass
+    return proxies or None
+
+
+def proxy_for_url(url, mode=None):
+    mode = network_mode() if mode is None else mode
+    proxies = resolve_proxy() if mode != "direct" else None
+    if mode == "auto" and proxies and requests.utils.should_bypass_proxies(url, no_proxy=proxies.get("no_proxy")):
+        return None
+    return proxies if proxies and requests.utils.select_proxy(url, proxies) else None
 
 
 def request_timeout(read_timeout=None):
@@ -74,6 +122,9 @@ def request_timeout(read_timeout=None):
 def error_summary(exc) -> str:
     response = getattr(exc, "response", None)
     status = f" HTTP {response.status_code}" if response is not None else ""
+    tunnel = re.search(r"Tunnel connection failed:\s*(\d{3})\b", str(exc))
+    if tunnel:
+        status = f" CONNECT {tunnel.group(1)}（代理拒绝 HTTPS 隧道）"
     return f"{type(exc).__name__}{status}"
 
 
@@ -103,10 +154,10 @@ def request(method: str, url: str, **kw):
     headers.update(kw.pop("headers", {}) or {})
     kw["headers"] = headers
     mode = network_mode()
-    proxy = resolve_proxy() if mode != "direct" else None
+    proxy = proxy_for_url(url, mode)
     if mode == "proxy" and not proxy:
-        raise ValueError("proxy 模式未配置有效 AGENT_PROXY，请填写远端可访问的代理地址")
-    attempts = [True] if mode == "proxy" else ([False, True] if mode == "auto" and proxy else [False])
+        raise ValueError("proxy 模式没有当前协议的代理，请配置 https_proxy/http_proxy/all_proxy 或 AGENT_PROXY")
+    attempts = [bool(proxy)]
     last_exc = None
     for use_proxy in attempts:
         label = f"{'代理' if use_proxy else '直连'} {method} {urlsplit(url).hostname}"

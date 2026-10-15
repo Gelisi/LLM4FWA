@@ -41,10 +41,10 @@ def main():
     try:
         client = get_client(env)
         mode = net.network_mode()
-        proxy = net.resolve_proxy()
-        print(f"网络模式: {mode}；代理={'已配置' if proxy else '未配置'}", flush=True)
+        proxy = net.proxy_for_url(env.get("AGENT_BASE_URL", ""), mode)
+        print(f"网络模式: {mode}；实际路由={'代理' if proxy else '直连'}", flush=True)
         if mode == "proxy" and not proxy:
-            raise ValueError("请配置远端可访问的 AGENT_PROXY，proxy 模式不会尝试直连")
+            raise ValueError("请配置当前协议的 https_proxy/http_proxy/all_proxy 或 AGENT_PROXY")
     except (RuntimeError, ValueError) as e:
         print(f"配置不完整: {e}", flush=True)
         return 1
@@ -58,19 +58,13 @@ def main():
         print("排查建议：\n"
               "  1) ConnectTimeout/ProxyError：检查远端到端点或代理的连通性\n"
               "  2) ReadTimeout：连接建立后仍无响应，检查网关和模型服务\n"
-              "  3) HTTP 401/403：检查凭证或权限；其他 HTTP 错误检查网关配置\n"
+              "  3) CONNECT 403/407：代理访问许可/认证问题；HTTP 401/403：API 凭证或权限问题\n"
               "  4) 用 --network-mode direct/proxy 分别测试，代理必须是远端可访问的真实地址")
         return 1
 
 
 def _load(path: str) -> dict:
-    env = {}
-    for line in Path(path).read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, _, v = line.partition("=")
-            env[k.strip()] = v.strip().strip('"').strip("'")
-    return env
+    return net.read_env(Path(path))
 
 
 if __name__ == "__main__":
