@@ -54,12 +54,16 @@ def main():
     args = ap.parse_args()
 
     # 代理（兼容 AGENT_PROXY 与小写 http_proxy/https_proxy/all_proxy）：
-    # 仅作用于 git 网络命令的环境
+    # 支持 $var 引用系统环境变量；仅作用于 git 网络命令的环境
+    import os
     env = {}
     e = load_env()
     proxy = e.get("AGENT_PROXY") or e.get("https_proxy") or e.get("HTTPS_PROXY")
     if proxy:
-        env = {"http_proxy": proxy, "https_proxy": proxy, "all_proxy": proxy}
+        if proxy.startswith("$"):
+            proxy = os.environ.get(proxy[1:], "")
+        if proxy:
+            env = {"http_proxy": proxy, "https_proxy": proxy, "all_proxy": proxy}
 
     if not (ROOT / ".git").exists():
         git(["init", "-b", "main"])
