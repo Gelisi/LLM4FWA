@@ -8,18 +8,27 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agent.llm import get_client, load_env  # noqa: E402
+from agent import net  # noqa: E402
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=None, help="指定 .env 路径（默认 agent/.env）")
+    ap.add_argument("--network-mode", choices=("auto", "direct", "proxy"))
+    ap.add_argument("--timeout", type=float, default=25, help="每条网络路由的响应超时秒数")
     args = ap.parse_args()
+    if args.timeout <= 0:
+        ap.error("timeout 必须为正数")
+    if args.network_mode:
+        os.environ["AGENT_NETWORK_MODE"] = args.network_mode
 
     env = load_env() if not args.env else _load(args.env)
     if not env:
@@ -27,25 +36,30 @@ def main():
               "  cp agent/.env.template agent/.env  然后填入凭证")
         return 1
     kind = env.get("AGENT_LLM_KIND", "?")
-    print(f"适配器: {kind}  模型: {env.get('AGENT_MODEL')}")
-    print(f"端点:   {env.get('AGENT_BASE_URL')}"
-          f"{' (经代理 ' + env['AGENT_PROXY'] + ')' if env.get('AGENT_PROXY') else ''}")
+    print(f"适配器: {kind}  模型: {env.get('AGENT_MODEL')}", flush=True)
+    print(f"端点主机: {urlsplit(env.get('AGENT_BASE_URL', '')).hostname}", flush=True)
     try:
         client = get_client(env)
-    except RuntimeError as e:
-        print(f"配置不完整: {e}")
+        mode = net.network_mode()
+        proxy = net.resolve_proxy()
+        print(f"网络模式: {mode}；代理={'已配置' if proxy else '未配置'}", flush=True)
+        if mode == "proxy" and not proxy:
+            raise ValueError("请配置远端可访问的 AGENT_PROXY，proxy 模式不会尝试直连")
+    except (RuntimeError, ValueError) as e:
+        print(f"配置不完整: {e}", flush=True)
         return 1
     try:
         out = client.chat([{"role": "user", "content": "只回复两个字：正常"}],
-                          temperature=0, max_tokens=16)
-        print(f"连通性: OK  模型回复: {out[:50]!r}")
+                          temperature=0, max_tokens=16, timeout=args.timeout)
+        print(f"连通性: OK  模型回复: {out[:50]!r}", flush=True)
         return 0
     except Exception as e:  # noqa: BLE001
-        print(f"连通性: 失败 -> {e}")
+        print(f"连通性: 失败 -> {net.error_summary(e)}", flush=True)
         print("排查建议：\n"
-              "  1) key 是否有效（curl 直接测端点）\n"
-              "  2) 需要外网时设置 AGENT_PROXY（见 .env.template 注释）\n"
-              "  3) iChat 用户：确认 app 未被网关停用（403=disabled 即需换 app）")
+              "  1) ConnectTimeout/ProxyError：检查远端到端点或代理的连通性\n"
+              "  2) ReadTimeout：连接建立后仍无响应，检查网关和模型服务\n"
+              "  3) HTTP 401/403：检查凭证或权限；其他 HTTP 错误检查网关配置\n"
+              "  4) 用 --network-mode direct/proxy 分别测试，代理必须是远端可访问的真实地址")
         return 1
 
 

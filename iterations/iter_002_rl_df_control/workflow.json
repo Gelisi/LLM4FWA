@@ -1,6 +1,6 @@
 {
   "iteration": "iterations/iter_002_rl_df_control",
-  "stage": "upload",
+  "stage": "completed",
   "run_id": "1127b5c3acbb",
   "started_at": 1792058974.8714786,
   "config": {
@@ -187,10 +187,25 @@
       "elapsed_s": 2.275,
       "log": "iterations/iter_002_rl_df_control/artifacts/1127b5c3acbb/summarize_11.log",
       "code_sha256": "95fbe82bae5cbae358dbabd99b5ab9eb6f59719271f71173fb771b9d5bcadcba"
+    },
+    {
+      "kind": "command",
+      "time": 1792059927.2169797,
+      "label": "upload",
+      "argv": [
+        "/root/miniconda3/bin/python3",
+        "agent/sync_github.py",
+        "--message",
+        "iter_002_rl_df_control: RL df control experiments and workflow"
+      ],
+      "returncode": 0,
+      "elapsed_s": 52.19,
+      "log": "iterations/iter_002_rl_df_control/artifacts/1127b5c3acbb/upload_12.log",
+      "code_sha256": "95fbe82bae5cbae358dbabd99b5ab9eb6f59719271f71173fb771b9d5bcadcba"
     }
   ],
   "initial_code": "95fbe82bae5cbae358dbabd99b5ab9eb6f59719271f71173fb771b9d5bcadcba",
-  "updated_at": 1792059338.343532,
+  "updated_at": 1792059927.3593564,
   "reviewed_code": "95fbe82bae5cbae358dbabd99b5ab9eb6f59719271f71173fb771b9d5bcadcba",
   "smoke": {
     "benchmarks": [

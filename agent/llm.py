@@ -38,13 +38,13 @@ class OpenAICompatClient:
         self.api_key, self.base_url, self.model = api_key, base_url.rstrip("/"), model
         self.last_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
-    def chat(self, messages, temperature=0.3, max_tokens=4096) -> str:
+    def chat(self, messages, temperature=0.3, max_tokens=4096, timeout=None) -> str:
         r = net.post(
             self.base_url + "/chat/completions",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={"model": self.model, "messages": messages,
                   "temperature": temperature, "max_tokens": max_tokens},
-            timeout=300)
+            timeout=net.request_timeout(timeout))
         r.raise_for_status()
         data = r.json()
         u = data.get("usage") or {}
@@ -63,13 +63,13 @@ class IChatClient:
         self.endpoint, self.model = endpoint, model
         self.last_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
-    def chat(self, messages, temperature=0.3, max_tokens=4096) -> str:
+    def chat(self, messages, temperature=0.3, max_tokens=4096, timeout=None) -> str:
         import time
         ts = str(int(time.time()))
         sign = hmac.new(self.app_key.encode(),
                         f"x-timestamp: {ts}\nx-source: {self.source}".encode(),
                         hashlib.sha256).hexdigest()
-        r = net.post(self.endpoint, timeout=300,
+        r = net.post(self.endpoint, timeout=net.request_timeout(timeout),
                      headers={"X-AppID": self.app_id, "X-Source": self.source,
                               "X-Timestamp": ts, "X-Authorization": sign,
                               "Content-Type": "application/json"},
@@ -89,6 +89,7 @@ class IChatClient:
 def get_client(env: dict | None = None):
     """根据 .env 构建客户端；配置缺失/不完整时抛 RuntimeError（含修复指引）。"""
     env = env if env is not None else load_env()
+    net.configure(env)
     kind = (env.get("AGENT_LLM_KIND") or os.environ.get("AGENT_LLM_KIND") or "").lower()
     proxy = env.get("AGENT_PROXY") or os.environ.get("AGENT_PROXY")
     if not kind:

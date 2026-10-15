@@ -112,16 +112,23 @@ def run_session(client, box, system, task, sess: Path, max_turns: int,
         t0 = time.time()
         reply = None
         for attempt in range(3):
+            waiting = f"[LLM] turn={turn} 请求 {attempt + 1}/3，等待模型响应…"
+            print(waiting, flush=True)
+            log_session(sess, "request", waiting)
             try:
                 reply = client.chat(messages, temperature=CFG.get("temperature", 0.3),
                                     max_tokens=CFG.get("max_tokens", 4096))
                 break
             except Exception as e:  # noqa: BLE001
+                from agent.net import error_summary
+                feedback = f"[LLM 请求失败] {error_summary(e)}"
+                print(feedback, flush=True)
+                log_session(sess, "error", feedback)
                 if attempt == 2:
-                    feedback = f"[LLM 调用失败，跳过本轮] {e}"
-                    log_session(sess, "error", feedback)
                     break
-                time.sleep(10 * (attempt + 1))
+                delay = 10 * (attempt + 1)
+                print(f"[LLM] {delay}s 后重试", flush=True)
+                time.sleep(delay)
         if reply is None:
             stats["exit_reason"] = "llm_error"
             break
@@ -189,11 +196,9 @@ def main():
         ap.error("需要 --task 或 --goal 之一")
 
     box = ToolBox(CFG)
-    # 代理策略（net.py）：直连优先，失败自动回退到 .env 中解析出的代理。
-    # 不再全局注入 os.environ，避免把代理强加给所有子进程。
-    _env = load_env()
-    if not (_env.get("AGENT_PROXY") or _env.get("https_proxy") or _env.get("http_proxy")):
-        print("[net] 未配置代理，全部直连")
+    from agent import net
+    net.configure(load_env())
+    print(f"[net] 模式={net.network_mode()}；代理={'已配置' if net.resolve_proxy() else '未配置'}", flush=True)
     system = build_system_prompt(args.target_rank)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     sess_dir = ROOT / CFG["session_log_dir"]
