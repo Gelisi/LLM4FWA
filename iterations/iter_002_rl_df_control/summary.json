@@ -1,0 +1,39 @@
+{
+  "iteration": "iterations/iter_002_rl_df_control",
+  "tag": "iter_002_rl_df_control_1127b5c3acbb_freeze_8",
+  "test": "paired Wilcoxon, uncorrected per problem, alpha=0.05",
+  "policy_sha256": "f03043f635222fa46e69d30cabdc84fd94ce42041e746e79bfa54c5cecb3b173",
+  "rows": [
+    {
+      "problem": "cec2022/F10_D10",
+      "runs": 30,
+      "tfwa_mean": 107.37881325172879,
+      "rl_mean": 114.4375728744432,
+      "tfwa_std": 26.940628960514363,
+      "rl_std": 36.639920481446715,
+      "p_value": 0.22064675763249397,
+      "mark": "="
+    },
+    {
+      "problem": "cec2022/F12_D10",
+      "runs": 30,
+      "tfwa_mean": 64.3274822661545,
+      "rl_mean": 64.3813044927524,
+      "tfwa_std": 0.6825608258908021,
+      "rl_std": 0.6935926971040279,
+      "p_value": 0.935398668050766,
+      "mark": "="
+    },
+    {
+      "problem": "cec2022/F9_D10",
+      "runs": 30,
+      "tfwa_mean": 229.33159600938282,
+      "rl_mean": 229.33982232805465,
+      "tfwa_std": 0.019136709376141595,
+      "rl_std": 0.016601892705500304,
+      "p_value": 0.10483990423381329,
+      "mark": "="
+    }
+  ],
+  "scope": "仅当前配置覆盖问题；不代表全 benchmark 达标"
+}

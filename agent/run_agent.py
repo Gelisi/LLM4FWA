@@ -64,16 +64,31 @@ def log_token(usage: dict, meta: dict):
 
 
 def goal_achieved(target_rank: int) -> bool:
-    """检查最新 status.json：所有 benchmark achieved 即达成。"""
-    latest = None
-    for p in sorted((ROOT / "results").glob("*/status.json")):
-        latest = p
-    if latest is None:
+    """仅完整、冻结、五个 benchmark 的 RL 评测可触发总目标停止。"""
+    paths = list((ROOT / "results").glob("fwa_rl_*/status.json"))
+    if not paths:
         return False
+    latest = max(paths, key=lambda p: p.stat().st_mtime)
     try:
+        from fwarl.bench import BENCH_SPECS, CEC2019_FUNC_DIMS
         d = json.loads(latest.read_text())
-        return bool(d.get("achieved")) and all(d["achieved"].values())
-    except Exception:
+        cfg = json.loads((latest.parent / "experiment_config.json").read_text())
+        if cfg.get("train") or not cfg.get("policy_sha256") or cfg.get("df_control") != "rl_replace":
+            return False
+        ranks = d.get("bench_ranks", {})
+        if set(ranks) != set(BENCH_SPECS) or any(r > target_rank for r in ranks.values()):
+            return False
+        for bench, spec in BENCH_SPECS.items():
+            for fn in range(1, spec["num_functions"] + 1):
+                dims = [CEC2019_FUNC_DIMS.get(fn, 10)] if bench == "cec2019" else spec["dims"]
+                for dim in dims:
+                    runs = [json.loads(p.read_text()) for p in
+                            (latest.parent / bench / f"F{fn}_D{dim}").glob("run_*.json")]
+                    if len(runs) < 30 or any(r.get("status") != "success" or
+                                            r.get("max_evals") != spec["eval_factor"] * dim for r in runs):
+                        return False
+        return True
+    except (OSError, ValueError, KeyError, TypeError):
         return False
 
 
@@ -87,7 +102,9 @@ def run_session(client, box, system, task, sess: Path, max_turns: int,
     """单次 ReAct 会话。返回 {turns, tokens, finished, summary}。"""
     messages = [{"role": "system", "content": system},
                 {"role": "user", "content": f"任务：{task}\n请开始。先读状态，再动手。"}]
-    stats = {"turns": 0, "tokens": 0, "finished": False, "summary": "", "hit_max": False}
+    stats = {"turns": 0, "tokens": 0, "finished": False, "summary": "", "hit_max": False,
+             "exit_reason": "running"}
+    session_start = time.time()
 
     turn = 0
     while max_turns is None or turn < max_turns:
@@ -106,6 +123,7 @@ def run_session(client, box, system, task, sess: Path, max_turns: int,
                     break
                 time.sleep(10 * (attempt + 1))
         if reply is None:
+            stats["exit_reason"] = "llm_error"
             break
 
         dt = time.time() - t0
@@ -121,14 +139,23 @@ def run_session(client, box, system, task, sess: Path, max_turns: int,
         if err:
             feedback = f"[格式错误] {err}"
         elif action["tool"] == "finish":
-            stats["finished"] = True
-            stats["summary"] = action["args"].get("summary", "")
-            log_session(sess, "finish", stats["summary"])
-            print(f"会话完成: {stats['summary'][:300]}")
-            return stats
+            blocker = None if meta.get("mode") == "mock" else box.workflow.finish_error(after=session_start)
+            if blocker:
+                feedback = f"[finish 被拒绝] {blocker}"
+            else:
+                stats["finished"] = True
+                stats["exit_reason"] = "workflow_completed"
+                stats["elapsed_s"] = round(time.time() - session_start, 3)
+                stats["summary"] = action["args"].get("summary", "")
+                log_session(sess, "finish", stats["summary"])
+                print(f"会话完成: {stats['summary'][:300]}")
+                return stats
         else:
             verr = ToolBox.validate_args(action["tool"], action["args"])
-            result = verr if verr else box.run(action["tool"], action["args"])
+            try:
+                result = verr if verr else box.run(action["tool"], action["args"])
+            except Exception as e:
+                result = f"工具执行失败（需反思修订或重试，不能视为完成）: {type(e).__name__}: {e}"
             feedback = f"[{action['tool']} 结果]\n{result}"
 
         print(feedback[:400] + ("..." if len(feedback) > 400 else ""))
@@ -136,7 +163,10 @@ def run_session(client, box, system, task, sess: Path, max_turns: int,
         messages.append({"role": "assistant", "content": reply})
         messages.append({"role": "user", "content": feedback})
 
-    stats["hit_max"] = True
+    stats["hit_max"] = stats["exit_reason"] == "running"
+    if stats["hit_max"]:
+        stats["exit_reason"] = "max_turns"
+    stats["elapsed_s"] = round(time.time() - session_start, 3)
     return stats
 
 
@@ -213,12 +243,19 @@ def main():
     # ---------------- 目标驱动模式 ----------------
     if args.goal:
         used_tokens = 0
+        run_start = time.time()
+        manifest = {"run_id": stamp, "started_at": run_start, "arguments": vars(args), "sessions": []}
+        manifest_path = sess_dir / f"{stamp}_run.json"
+        exit_reason = "max_sessions"
         for si in range(1, args.max_sessions + 1):
+            system = build_system_prompt(args.target_rank)
             if args.token_budget and used_tokens >= args.token_budget:
                 print(f"[goal] token 预算 {args.token_budget} 已用 {used_tokens}，停止")
+                exit_reason = "token_budget"
                 break
             if goal_achieved(args.target_rank):
-                print(f"[goal] 已达成 Top-{args.target_rank}（status.json 全 achieved），停止")
+                print(f"[goal] 已达成 Top-{args.target_rank}（完整冻结评测），停止")
+                exit_reason = "goal_achieved"
                 break
             task = (f"总目标：{args.goal}。当前是第 {si} 段会话。"
                     "本段会话 = 一个 iter 的完整落地：先读 research_log.md 与各 iter 状态，"
@@ -232,17 +269,26 @@ def main():
             meta = {"mode": "goal", "session": si, "task": args.goal}
             stats = run_session(client, box, system, task, sess, args.max_turns, meta, log_token)
             used_tokens += stats["tokens"]
+            manifest["sessions"].append({"session": si, **stats})
+            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
             with open(LEDGER, "a") as f:
                 f.write(json.dumps({"ts": datetime.now().isoformat(timespec="seconds"),
                                     "type": "session_summary", "mode": "goal",
                                     "session": si, **stats}, ensure_ascii=False) + "\n")
             print(f"[goal] 会话 {si} 摘要: turns={stats['turns']} "
-                  f"tokens={stats['tokens']} finished={stats['finished']}")
+                  f"tokens={stats['tokens']} finished={stats['finished']} reason={stats['exit_reason']}")
+            if stats["exit_reason"] == "llm_error":
+                exit_reason = "llm_error"
+                break
             if goal_achieved(args.target_rank):
                 print(f"[goal] 已达成 Top-{args.target_rank}！")
+                exit_reason = "goal_achieved"
                 break
-        print(f"[goal] 结束。累计 token={used_tokens}，账本={LEDGER}")
-        return 0
+        manifest.update(exit_reason=exit_reason, tokens=used_tokens,
+                        ended_at=time.time(), elapsed_s=round(time.time() - run_start, 3))
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
+        print(f"[goal] 结束 reason={exit_reason}。累计 token={used_tokens}，运行记录={manifest_path}")
+        return 1 if exit_reason == "llm_error" else 0
 
     # ---------------- 单任务模式 ----------------
     sess = sess_dir / f"{stamp}.md"
@@ -252,8 +298,8 @@ def main():
         f.write(json.dumps({"ts": datetime.now().isoformat(timespec="seconds"),
                             "type": "session_summary", "mode": "task", **stats},
                            ensure_ascii=False) + "\n")
-    print(f"tokens={stats['tokens']}, turns={stats['turns']}, 账本={LEDGER}")
-    return 0
+    print(f"tokens={stats['tokens']}, turns={stats['turns']}, reason={stats['exit_reason']}, 账本={LEDGER}")
+    return 0 if stats["finished"] else 1
 
 
 if __name__ == "__main__":

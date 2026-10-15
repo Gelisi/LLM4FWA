@@ -1,0 +1,13 @@
+{
+ "algo": "fwa_rl",
+ "tag": "iter_002_rl_df_control_1127b5c3acbb_freeze_8",
+ "target_rank": 2,
+ "bench_ranks": {
+  "cec2022": 10.0
+ },
+ "achieved": {
+  "cec2022": false
+ },
+ "overall_rank": 10.0,
+ "achieved_overall": false
+}

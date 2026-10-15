@@ -1,0 +1,23 @@
+{
+ "algos": [
+  "fwa_rl"
+ ],
+ "benchmarks": [
+  "cec2013"
+ ],
+ "dims": [
+  10
+ ],
+ "functions": [
+  6
+ ],
+ "runs": 1,
+ "max_evals_override": 2000,
+ "tag": "iter_002_rl_df_control_1127b5c3acbb_smoke_3",
+ "train": true,
+ "seed0": 42,
+ "policy": null,
+ "policy_sha256": null,
+ "workers": 3,
+ "df_control": "rl_replace"
+}

@@ -1,0 +1,23 @@
+{
+  "benchmarks": [
+    "cec2013"
+  ],
+  "functions": [
+    6,
+    7,
+    8
+  ],
+  "dims": [
+    10
+  ],
+  "runs": 5,
+  "seed0": 42,
+  "workers": 3,
+  "max_evals_override": 20000,
+  "algos": [
+    "fwa_rl"
+  ],
+  "train": true,
+  "tag": "iter_002_rl_df_control_1127b5c3acbb_train_5",
+  "policy": null
+}

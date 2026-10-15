@@ -1,0 +1,26 @@
+{
+ "algos": [
+  "tfwa",
+  "fwa_rl"
+ ],
+ "benchmarks": [
+  "cec2022"
+ ],
+ "dims": [
+  10
+ ],
+ "functions": [
+  9,
+  10,
+  12
+ ],
+ "runs": 30,
+ "max_evals_override": null,
+ "tag": "iter_002_rl_df_control_1127b5c3acbb_freeze_8",
+ "train": false,
+ "seed0": 4242,
+ "policy": "/mnt/new_gemini/shipengcen/autoresearch/iterations/iter_002_rl_df_control/artifacts/policy_1127b5c3acbb_7.json",
+ "policy_sha256": "f03043f635222fa46e69d30cabdc84fd94ce42041e746e79bfa54c5cecb3b173",
+ "workers": 6,
+ "df_control": "rl_replace"
+}

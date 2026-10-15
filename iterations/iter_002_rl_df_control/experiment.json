@@ -1,0 +1,24 @@
+{
+  "prior_artifacts": [
+    "iterations/iter_000_baseline/IDEA.md",
+    "iterations/iter_000_baseline/RESULTS.md",
+    "iterations/iter_001_rl_restart/IDEA.md"
+  ],
+  "train": {
+    "benchmarks": ["cec2013"],
+    "functions": [6, 7, 8],
+    "dims": [10],
+    "runs": 5,
+    "seed0": 42,
+    "workers": 3,
+    "max_evals_override": 20000
+  },
+  "evaluate": {
+    "benchmarks": ["cec2022"],
+    "functions": [9, 10, 12],
+    "dims": [10],
+    "runs": 30,
+    "seed0": 4242,
+    "workers": 6
+  }
+}

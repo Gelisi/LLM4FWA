@@ -46,7 +46,14 @@ TOOLS_SPEC = [
                                    "跑任何 GPU 任务前先调用；发现空闲卡应安排任务"
                                    "（CUDA_VISIBLE_DEVICES=<idx> 前缀）。",
      "args": {}},
-    {"name": "finish", "desc": "结束本轮研究会话，写总结。", "args": {"summary": "str"}},
+    {"name": "workflow_start", "desc": "启动/恢复研究迭代，读取 experiment.json 和历史证据。",
+     "args": {"iteration": "str"}},
+    {"name": "workflow_review", "desc": "审核 IDEA 或代码；记录反思，实验失败后可反复修订重跑。",
+     "args": {"evidence": "str", "reflection": "str"}},
+    {"name": "workflow_run", "desc": "执行当前阶段 smoke/train/freeze/collect/upload；真实产物通过才能前进。",
+     "args": {"stage": "str"}},
+    {"name": "workflow_status", "desc": "查看当前阶段、执行记录和失败日志。", "args": {}},
+    {"name": "finish", "desc": "只有本会话真实实验、汇总及上传完成后才能结束。", "args": {"summary": "str"}},
 ]
 
 
@@ -57,15 +64,25 @@ class ToolBox:
         self.deny = tuple(config.get("bash_deny_patterns", []))
         self.timeout = config.get("command_timeout_s", 900)
         self.max_out = config.get("tool_output_max_chars", 6000)
+        from .workflow import ResearchWorkflow
+        self.workflow = ResearchWorkflow(ROOT, self.timeout)
 
     # ------------------------------------------------------------------
     def _resolve(self, rel: str) -> Path:
         p = (ROOT / rel).resolve()
-        if not str(p).startswith(str(ROOT)):
-            raise ValueError(f"路径越界（必须在 {ROOT} 内）: {rel}")
+        if not p.is_relative_to(ROOT) or ".codebuddy" in p.parts:
+            raise ValueError(f"路径越界或受保护（必须在 {ROOT} 内且不能访问 .codebuddy）: {rel}")
         return p
 
     def run(self, name: str, args: dict) -> str:
+        if name == "workflow_start":
+            return self.workflow.start(args["iteration"])
+        if name == "workflow_status":
+            return self.workflow.status()
+        if name == "workflow_review":
+            return self.workflow.review(args["evidence"], args["reflection"])
+        if name == "workflow_run":
+            return self.workflow.run(args["stage"])
         if name == "bash":
             return self._bash(args["command"])
         if name == "read_file":

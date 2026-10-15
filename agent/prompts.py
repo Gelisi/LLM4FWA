@@ -29,11 +29,10 @@ def _iter_statuses() -> str:
 
 
 def _latest_status_json() -> str:
-    best = None
-    for p in sorted((ROOT / "results").glob("*/status.json")):
-        best = p
-    if best is None:
-        return "(尚无 status.json —— 还没有任何算法完成正式评测)"
+    paths = list((ROOT / "results").glob("fwa_rl_*/status.json"))
+    if not paths:
+        return "(尚无 RL status.json)"
+    best = max(paths, key=lambda p: p.stat().st_mtime)
     try:
         d = json.loads(best.read_text())
         return f"{best.parent.parent.name}: bench_ranks={d.get('bench_ranks')}, " \
@@ -61,15 +60,26 @@ def build_system_prompt(target_rank: int = 2) -> str:
 --- 最新目标状态 ---
 {_latest_status_json()}
 
-## 你的任务
-按 AGENT_GUIDE 的迭代循环推进研究：选假设 → cp -r iterations/_TEMPLATE → 填 IDEA.md →
-改代码 → smoke → 训练(--train) → train_policy 聚合 → 冻结评测 → summarize → 回填 RESULTS.md →
-research_log.md 追加一行。一次只改一个变量；负结果也如实记录。
+## 你的任务：TFWA 自由度控制研究 workflow
+研究变量限定为 t 分布自由度 df：RL 必须替换原版 df 更新规则，而非叠加 factors。
+暂不做 RL 重启、步长或火花数控制；保留原版 TFWA 作同预算同种子对照。
+按历史 IDEA、RESULTS、summary.json 提出可证伪的新 idea，负结果也作为下一轮证据。
+参考 iterations/iter_002_rl_df_control/experiment.json 的配置结构：train/evaluate
+包含 benchmarks/functions/dims/runs/seed0/workers，prior_artifacts 引用真实旧文件。
+1. 准备本 iter 的 IDEA.md、CODE.md、experiment.json；workflow_start(iteration)。
+2. workflow_review(evidence=本 iter IDEA.md, reflection=证据/假设/实验设计)；
+3. 实现 df 控制，反复检查代码、推理奖励/状态/控制权；更新 CODE.md，再 workflow_review；
+4. 按序 workflow_run(stage=smoke/train/freeze/collect/upload)。
+   smoke/实验失败：读返回的完整日志，反思修订 CODE/代码，再 workflow_review 退回 smoke。
+   train 自动做轨迹回放聚合；freeze 加载冻结策略、与原版 TFWA 配对 30 runs；
+   collect 校验预算/种子/df 指令、汇总配对统计、回填 RESULTS/research_log；upload 提交推送。
+5. 查看 summary.json，补充机制解释与下一步；全部完成才 finish。
+每次研究会话必须实际跑实验，旧结果、立项、编译或手写摘要都不能代替新实验。
+工作流会硬性拒绝没有本会话实验产物的 finish；不要绕过 workflow 直接同步或宣称完成。
 
-## 成果同步（每个 iter 收尾必做）
-每个 iter 达到一个里程碑（立项/实现完成/实验完成）时执行：
-  python3 agent/sync_github.py --message "iter_XXX: <简述进展>"
-代码与文档会提交并推送到 github.com/Gelisi/LLM4FWA（一代一代留痕）。
+## 成果同步
+由 workflow_run(upload) 在真实实验和统计完成后同步代码、文档和汇总至
+已配置的 github.com/Gelisi/LLM4FWA。上传失败记录为未完成，重试上传即可，不伪造成功。
 
 ## GPU 使用纪律（用户硬性要求：不让任何一张卡空太久）
 - 跑任何 GPU 任务前先调 gpu_status 看状态；用 CUDA_VISIBLE_DEVICES=<空闲卡号> 指定；
@@ -89,7 +99,7 @@ research_log.md 追加一行。一次只改一个变量；负结果也如实记�
 bash / read_file / write_file / edit_file / web_search / paper_search /
 github_search / web_fetch / gpu_status / finish **全部可用，无需申请**。
 禁止以"工具不可用/权限不足/环境受限"为由不行动或直接 finish——
-那属于幻觉。finish 之前必须完成至少一个实质动作（读了文件/改了代码/跑了命令）。
+工具故障必须以实际错误日志为依据。读文件/改文档不满足 finish：必须通过本会话 workflow 实验门槛。
 
 ## 纪律
 - goal 模式下**一段会话 = 一个 iter 的完整落地**（IDEA→代码→冒烟→实验→统计→

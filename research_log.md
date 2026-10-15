@@ -26,3 +26,5 @@
   **距 Top-2 目标（阶段5）尚远**；短板 = F9(229)/F10(121~164)/F7。
   注：5 runs 的 Wilcoxon 功效很低（大量 '='），正式对比需 30 runs。
   已规范化为四件套结构（IDEA/CODE/RESULTS/诊断数据）。
+
+- **iter_002_rl_df_control (2026-10-15)** 【实验完成，上传状态见 workflow.json】：RL 已唯一控制 df，90 个 RL run/290317 次代级决策无指令覆盖；13 项回归测试通过。跨 CEC2013 训练 15 runs，CEC2022 F9/F10/F12 与原版配对共 180 runs（30 runs/问题/算法，ok=180/bad=0，约 309 秒）。三个问题均无显著收益，F10 mean error=原版 107.379 / RL 114.438；冻结策略集中到 increase/heavy_tail，下一轮只研究 df 范围或逐烟花控制。tag=iter_002_rl_df_control_1127b5c3acbb_freeze_8；完整负结果见 iterations/iter_002_rl_df_control/RESULTS.md 与 summary.json。

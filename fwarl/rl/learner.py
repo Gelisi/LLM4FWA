@@ -20,7 +20,9 @@ import numpy as np
 class LinearQAgent:
     def __init__(self, n_features: int, n_actions: int,
                  lr: float = 0.02, gamma: float = 0.9,
-                 eps_start: float = 0.3, eps_end: float = 0.05):
+                 eps_start: float = 0.3, eps_end: float = 0.05,
+                 policy_version: str | None = None):
+        self.policy_version = policy_version
         self.n_features = n_features
         self.n_actions = n_actions
         self.lr = lr
@@ -70,16 +72,20 @@ class LinearQAgent:
             json.dump({
                 "n_features": self.n_features,
                 "n_actions": self.n_actions,
+                "policy_version": self.policy_version,
                 "w": self.w.tolist(),
                 "steps": self._step,
                 "action_counts": self.action_counts(),
             }, f, indent=1)
 
     @classmethod
-    def load(cls, path, **overrides) -> "LinearQAgent":
+    def load(cls, path, expected_version=None, **overrides) -> "LinearQAgent":
         with open(path) as f:
             d = json.load(f)
-        agent = cls(d["n_features"], d["n_actions"], **overrides)
+        version = d.get("policy_version")
+        if expected_version is not None and version != expected_version:
+            raise ValueError(f"策略版本不匹配: {version!r} != {expected_version!r}；请重新训练")
+        agent = cls(d["n_features"], d["n_actions"], policy_version=version, **overrides)
         w = np.array(d["w"], dtype=float)
         if w.shape != agent.w.shape:
             raise ValueError(f"策略权重维度不匹配: {w.shape} != {agent.w.shape}")

@@ -1,0 +1,23 @@
+{
+  "benchmarks": [
+    "cec2022"
+  ],
+  "functions": [
+    9,
+    10,
+    12
+  ],
+  "dims": [
+    10
+  ],
+  "runs": 30,
+  "seed0": 4242,
+  "workers": 6,
+  "algos": [
+    "tfwa",
+    "fwa_rl"
+  ],
+  "train": false,
+  "tag": "iter_002_rl_df_control_1127b5c3acbb_freeze_8",
+  "policy": "iterations/iter_002_rl_df_control/artifacts/policy_1127b5c3acbb_7.json"
+}

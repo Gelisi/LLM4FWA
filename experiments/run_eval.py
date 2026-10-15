@@ -76,6 +76,9 @@ def run_single(args_tuple) -> dict:
         if algo == "fwa_rl":
             out["action_counts"] = res.get("action_counts")
             out["weight_norms"] = res.get("weight_norms")
+            out["policy_version"] = res["policy_version"]
+            out["df_control"] = res["df_control"]
+            out["df_trajectory"] = res["df_trajectory"]
             if train:
                 out["_traj"] = res.get("trajectory")
     except Exception as e:  # noqa: BLE001
@@ -105,6 +108,7 @@ def save_run(out_dir: Path, bench: str, func_num: int, dim: int, run_id: int, re
                 "trajectory": traj,
                 "weight_norms": result.get("weight_norms"),
                 "action_counts": result.get("action_counts"),
+                "policy_version": result.get("policy_version"),
             }, f)
 
 
@@ -118,10 +122,10 @@ def _worker(args_tuple):
     由主进程统一落盘。
     """
     (algo, bench, func_num, dim, _zero, seed0, max_evals_override,
-     train, policy_path, record_history) = args_tuple
+     train, policy_path, record_history, runs) = args_tuple
     results = []
     max_attempts = 3
-    for run_id in range(1, _RUNS + 1):
+    for run_id in range(1, runs + 1):
         task = (algo, bench, func_num, dim, run_id, seed0, max_evals_override,
                 train, policy_path, record_history)
         out, _ = run_single(task)
@@ -139,7 +143,7 @@ def _worker(args_tuple):
 def main():
     p = argparse.ArgumentParser(description="FWA+RL 统一评估器")
     p.add_argument("--config", help="JSON 配置文件（其余参数可省略）")
-    p.add_argument("--algo", default="fwa_rl", choices=ALGOS, nargs="+")
+    p.add_argument("--algo", default=["fwa_rl"], choices=ALGOS, nargs="+")
     p.add_argument("--bench", default=["cec2022"], nargs="+")
     p.add_argument("--dim", type=int, nargs="*", default=None)
     p.add_argument("--funcs", type=int, nargs="*", default=None)
@@ -152,6 +156,15 @@ def main():
     p.add_argument("--tag", default="exp")
     p.add_argument("--no-history", action="store_true", help="不记录收敛历史（省空间）")
     p.add_argument("--config-overrides", default=None, help="内部使用")
+    preliminary, _ = p.parse_known_args()
+    if preliminary.config:
+        with open(preliminary.config) as f:
+            cfg = json.load(f)
+        mapping = {"algos": "algo", "benchmarks": "bench", "dims": "dim",
+                   "functions": "funcs", "max_evals_override": "max_fes"}
+        defaults = {mapping.get(k, k): v for k, v in cfg.items()
+                    if mapping.get(k, k) in vars(preliminary)}
+        p.set_defaults(**defaults)
     args = p.parse_args()
 
     # 配置文件提供默认值，命令行参数优先
@@ -159,18 +172,26 @@ def main():
     algo_list, bench_list, dims, funcs, runs = args.algo, args.bench, args.dim, args.funcs, args.runs
     max_evals_override, workers, tag = args.max_fes, args.workers, args.tag
     seed0, train, policy = args.seed0, args.train, args.policy
-    if args.config:
-        with open(args.config) as f:
-            cfg = json.load(f)
-        algo_list = cfg.get("algos", algo_list)
-        bench_list = cfg.get("benchmarks", bench_list)
-        dims = cfg.get("dims", dims)
-        funcs = cfg.get("functions", funcs)
-        runs = cfg.get("runs", runs)
-        max_evals_override = cfg.get("max_evals_override", max_evals_override)
-        workers = cfg.get("workers", workers)
-        tag = cfg.get("tag", tag)
-        train = cfg.get("train", train)
+    if isinstance(algo_list, str):
+        algo_list = [algo_list]
+    if isinstance(bench_list, str):
+        bench_list = [bench_list]
+    policy_hash = None
+    if "fwa_rl" in algo_list:
+        if not train and not policy:
+            p.error("冻结 RL 评测必须指定 --policy；训练请指定 --train")
+        if policy:
+            from fwarl.rl.learner import LinearQAgent
+            from fwarl.rl.actions import POLICY_VERSION
+            from fwarl.fwa_rl import N_FEATURES, ACTIONS
+            import hashlib
+            policy = str(Path(policy).resolve())
+            agent = LinearQAgent.load(policy, expected_version=POLICY_VERSION)
+            if (agent.n_features, agent.n_actions) != (N_FEATURES, len(ACTIONS)):
+                p.error("策略维度不匹配")
+            policy_hash = hashlib.sha256(Path(policy).read_bytes()).hexdigest()
+    if runs < 1 or workers < 1:
+        p.error("runs 和 workers 必须为正数")
 
     tasks = []
     global _RUNS
@@ -184,14 +205,16 @@ def main():
             for fn in fns:
                 for d in (ds if bench != "cec2019" else [None]):
                     tasks.append((algo, bench, fn, d, 0, seed0, max_evals_override,
-                                  train and algo == "fwa_rl", policy, not args.no_history))
+                                  train and algo == "fwa_rl", policy, not args.no_history, runs))
     total = len(tasks) * runs
     print(f"共 {total} 个 run / {len(tasks)} 个问题任务 (algo={algo_list}, bench={bench_list}, "
           f"dims={dims or 'spec默认'}, runs={runs})")
 
     cfg_meta = {"algos": algo_list, "benchmarks": bench_list, "dims": dims, "functions": funcs,
                 "runs": runs, "max_evals_override": max_evals_override, "tag": tag,
-                "train": train, "seed0": seed0}
+                "train": train, "seed0": seed0, "policy": policy,
+                "policy_sha256": policy_hash, "workers": workers,
+                "df_control": "rl_replace" if "fwa_rl" in algo_list else "native"}
     for algo in algo_list:
         out_dir = ROOT / "results" / f"{algo}_{tag}"
         out_dir.mkdir(parents=True, exist_ok=True)

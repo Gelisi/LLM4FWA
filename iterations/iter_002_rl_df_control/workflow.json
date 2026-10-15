@@ -1,0 +1,265 @@
+{
+  "iteration": "iterations/iter_002_rl_df_control",
+  "stage": "upload",
+  "run_id": "1127b5c3acbb",
+  "started_at": 1792058974.8714786,
+  "config": {
+    "prior_artifacts": [
+      "iterations/iter_000_baseline/IDEA.md",
+      "iterations/iter_000_baseline/RESULTS.md",
+      "iterations/iter_001_rl_restart/IDEA.md"
+    ],
+    "train": {
+      "benchmarks": [
+        "cec2013"
+      ],
+      "functions": [
+        6,
+        7,
+        8
+      ],
+      "dims": [
+        10
+      ],
+      "runs": 5,
+      "seed0": 42,
+      "workers": 3,
+      "max_evals_override": 20000
+    },
+    "evaluate": {
+      "benchmarks": [
+        "cec2022"
+      ],
+      "functions": [
+        9,
+        10,
+        12
+      ],
+      "dims": [
+        10
+      ],
+      "runs": 30,
+      "seed0": 4242,
+      "workers": 6
+    }
+  },
+  "prior_artifacts": {
+    "iterations/iter_000_baseline/IDEA.md": "767ab17182c75a9d3e1c8397e239e354d14003e02539467bc164e0d2eece6f6b",
+    "iterations/iter_000_baseline/RESULTS.md": "3db9b144ffb56bd9f1e73c16c6d3e80b55f3134fa52530eb6991a881e3913ebc",
+    "iterations/iter_001_rl_restart/IDEA.md": "0ec7b5624607171a3924d4fcbe50ab7c0c33502a73dd33c8eb1e87477eff938c"
+  },
+  "events": [
+    {
+      "kind": "review",
+      "time": 1792058977.1229212,
+      "stage": "idea",
+      "evidence": "iterations/iter_002_rl_df_control/IDEA.md",
+      "sha256": "059db3c08be7f5c8506d980cd4ebd3413d524a183779612dc629ac9a4249f358",
+      "reflection": "历史 df 动作叠加原生增长且重启方向偏离目标，本轮关闭原规则并固定研究变量，使用跨 benchmark 训练和三问题 30 runs 配对冻结评测。"
+    },
+    {
+      "kind": "review",
+      "time": 1792058977.772523,
+      "stage": "implement",
+      "evidence": "iterations/iter_002_rl_df_control/CODE.md",
+      "sha256": "7f6f59edaf8905ac907277009b0c9c731a6a7bfd3e80194ddb199f7380a08d2c",
+      "reflection": "通过 fixed_nu 锁定每代策略指令，重启保留 df；全局最优反馈避免伪奖励；13 项回归测试通过，但优化收益和动作坍缩仍需真实实验验证。"
+    },
+    {
+      "kind": "command",
+      "time": 1792058982.103071,
+      "label": "unit_tests",
+      "argv": [
+        "/root/miniconda3/bin/python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-v"
+      ],
+      "returncode": 0,
+      "elapsed_s": 3.491,
+      "log": "iterations/iter_002_rl_df_control/artifacts/1127b5c3acbb/unit_tests_2.log",
+      "code_sha256": "95fbe82bae5cbae358dbabd99b5ab9eb6f59719271f71173fb771b9d5bcadcba"
+    },
+    {
+      "kind": "command",
+      "time": 1792058985.8232758,
+      "label": "smoke",
+      "argv": [
+        "/root/miniconda3/bin/python3",
+        "experiments/run_eval.py",
+        "--config",
+        "/mnt/new_gemini/shipengcen/autoresearch/iterations/iter_002_rl_df_control/artifacts/iter_002_rl_df_control_1127b5c3acbb_smoke_3.json"
+      ],
+      "returncode": 0,
+      "elapsed_s": 3.405,
+      "log": "iterations/iter_002_rl_df_control/artifacts/1127b5c3acbb/smoke_3.log",
+      "code_sha256": "95fbe82bae5cbae358dbabd99b5ab9eb6f59719271f71173fb771b9d5bcadcba"
+    },
+    {
+      "kind": "verified_experiment",
+      "time": 1792058986.3577297,
+      "phase": "smoke",
+      "tag": "iter_002_rl_df_control_1127b5c3acbb_smoke_3"
+    },
+    {
+      "kind": "command",
+      "time": 1792058995.4659271,
+      "label": "train",
+      "argv": [
+        "/root/miniconda3/bin/python3",
+        "experiments/run_eval.py",
+        "--config",
+        "/mnt/new_gemini/shipengcen/autoresearch/iterations/iter_002_rl_df_control/artifacts/iter_002_rl_df_control_1127b5c3acbb_train_5.json"
+      ],
+      "returncode": 0,
+      "elapsed_s": 8.265,
+      "log": "iterations/iter_002_rl_df_control/artifacts/1127b5c3acbb/train_5.log",
+      "code_sha256": "95fbe82bae5cbae358dbabd99b5ab9eb6f59719271f71173fb771b9d5bcadcba"
+    },
+    {
+      "kind": "verified_experiment",
+      "time": 1792058995.6985362,
+      "phase": "train",
+      "tag": "iter_002_rl_df_control_1127b5c3acbb_train_5"
+    },
+    {
+      "kind": "command",
+      "time": 1792058997.0565836,
+      "label": "replay",
+      "argv": [
+        "/root/miniconda3/bin/python3",
+        "experiments/train_policy.py",
+        "--glob",
+        "/mnt/new_gemini/shipengcen/autoresearch/results/fwa_rl_iter_002_rl_df_control_1127b5c3acbb_train_5/traj/*.json",
+        "--out",
+        "/mnt/new_gemini/shipengcen/autoresearch/iterations/iter_002_rl_df_control/artifacts/policy_1127b5c3acbb_7.json",
+        "--seed",
+        "42"
+      ],
+      "returncode": 0,
+      "elapsed_s": 1.052,
+      "log": "iterations/iter_002_rl_df_control/artifacts/1127b5c3acbb/replay_7.log",
+      "code_sha256": "95fbe82bae5cbae358dbabd99b5ab9eb6f59719271f71173fb771b9d5bcadcba"
+    },
+    {
+      "kind": "command",
+      "time": 1792059317.4210532,
+      "label": "freeze",
+      "argv": [
+        "/root/miniconda3/bin/python3",
+        "experiments/run_eval.py",
+        "--config",
+        "/mnt/new_gemini/shipengcen/autoresearch/iterations/iter_002_rl_df_control/artifacts/iter_002_rl_df_control_1127b5c3acbb_freeze_8.json"
+      ],
+      "returncode": 0,
+      "elapsed_s": 310.036,
+      "log": "iterations/iter_002_rl_df_control/artifacts/1127b5c3acbb/freeze_8.log",
+      "code_sha256": "95fbe82bae5cbae358dbabd99b5ab9eb6f59719271f71173fb771b9d5bcadcba"
+    },
+    {
+      "kind": "verified_experiment",
+      "time": 1792059319.0801451,
+      "phase": "freeze",
+      "tag": "iter_002_rl_df_control_1127b5c3acbb_freeze_8"
+    },
+    {
+      "kind": "collected",
+      "time": 1792059335.7104115,
+      "problems": 3,
+      "summary": "iterations/iter_002_rl_df_control/summary.json"
+    },
+    {
+      "kind": "command",
+      "time": 1792059338.1737952,
+      "label": "summarize",
+      "argv": [
+        "/root/miniconda3/bin/python3",
+        "experiments/summarize.py",
+        "--algo",
+        "fwa_rl",
+        "--tag",
+        "iter_002_rl_df_control_1127b5c3acbb_freeze_8"
+      ],
+      "returncode": 0,
+      "elapsed_s": 2.275,
+      "log": "iterations/iter_002_rl_df_control/artifacts/1127b5c3acbb/summarize_11.log",
+      "code_sha256": "95fbe82bae5cbae358dbabd99b5ab9eb6f59719271f71173fb771b9d5bcadcba"
+    }
+  ],
+  "initial_code": "95fbe82bae5cbae358dbabd99b5ab9eb6f59719271f71173fb771b9d5bcadcba",
+  "updated_at": 1792059338.343532,
+  "reviewed_code": "95fbe82bae5cbae358dbabd99b5ab9eb6f59719271f71173fb771b9d5bcadcba",
+  "smoke": {
+    "benchmarks": [
+      "cec2013"
+    ],
+    "functions": [
+      6
+    ],
+    "dims": [
+      10
+    ],
+    "runs": 1,
+    "seed0": 42,
+    "workers": 3,
+    "max_evals_override": 2000,
+    "algos": [
+      "fwa_rl"
+    ],
+    "train": true,
+    "tag": "iter_002_rl_df_control_1127b5c3acbb_smoke_3",
+    "policy": null
+  },
+  "train": {
+    "benchmarks": [
+      "cec2013"
+    ],
+    "functions": [
+      6,
+      7,
+      8
+    ],
+    "dims": [
+      10
+    ],
+    "runs": 5,
+    "seed0": 42,
+    "workers": 3,
+    "max_evals_override": 20000,
+    "algos": [
+      "fwa_rl"
+    ],
+    "train": true,
+    "tag": "iter_002_rl_df_control_1127b5c3acbb_train_5",
+    "policy": null
+  },
+  "policy": "iterations/iter_002_rl_df_control/artifacts/policy_1127b5c3acbb_7.json",
+  "policy_sha256": "f03043f635222fa46e69d30cabdc84fd94ce42041e746e79bfa54c5cecb3b173",
+  "freeze": {
+    "benchmarks": [
+      "cec2022"
+    ],
+    "functions": [
+      9,
+      10,
+      12
+    ],
+    "dims": [
+      10
+    ],
+    "runs": 30,
+    "seed0": 4242,
+    "workers": 6,
+    "algos": [
+      "tfwa",
+      "fwa_rl"
+    ],
+    "train": false,
+    "tag": "iter_002_rl_df_control_1127b5c3acbb_freeze_8",
+    "policy": "iterations/iter_002_rl_df_control/artifacts/policy_1127b5c3acbb_7.json"
+  },
+  "summary_sha256": "9da0ed525317329594ab5d8e64889c914e8ac3debcb2411ff1a0be7ecd181b12"
+}
