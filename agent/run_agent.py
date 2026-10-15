@@ -39,17 +39,21 @@ LEDGER = ROOT / CFG.get("token_ledger", "agent/token_usage.jsonl")
 
 
 def parse_action(text: str):
-    m = re.search(r"\{.*\}", text, re.DOTALL)
-    if not m:
-        return None, f"输出中没有 JSON 动作。原文前200字: {text[:200]}"
-    try:
-        obj = json.loads(m.group(0))
-    except json.JSONDecodeError as e:
-        return None, f"JSON 解析失败: {e}。请输出单个完整 JSON 对象。"
-    if not obj.get("tool"):
-        return None, "缺少 tool 字段"
-    return {"thought": obj.get("thought", ""), "tool": obj["tool"],
-            "args": obj.get("args", {})}, None
+    """从 LLM 输出提取第一个可解析的 JSON 对象（容忍前后缀/多段文本）。"""
+    dec = json.JSONDecoder()
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
+        try:
+            obj, _ = dec.raw_decode(text[i:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and obj.get("tool"):
+            return {"thought": obj.get("thought", ""), "tool": obj["tool"],
+                    "args": obj.get("args", {})}, None
+        if isinstance(obj, dict):
+            return None, f"JSON 缺少 tool 字段: {json.dumps(obj, ensure_ascii=False)[:150]}"
+    return None, f"输出中没有可解析的 JSON 动作。原文前200字: {text[:200]}"
 
 
 def log_token(usage: dict, meta: dict):
