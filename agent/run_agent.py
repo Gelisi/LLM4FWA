@@ -89,7 +89,9 @@ def run_session(client, box, system, task, sess: Path, max_turns: int,
                 {"role": "user", "content": f"任务：{task}\n请开始。先读状态，再动手。"}]
     stats = {"turns": 0, "tokens": 0, "finished": False, "summary": "", "hit_max": False}
 
-    for turn in range(1, max_turns + 1):
+    turn = 0
+    while max_turns is None or turn < max_turns:
+        turn += 1
         t0 = time.time()
         reply = None
         for attempt in range(3):
@@ -112,7 +114,8 @@ def run_session(client, box, system, task, sess: Path, max_turns: int,
         stats["turns"] = turn
         log_token(usage, {**meta, "turn": turn})
         log_session(sess, f"llm turn{turn} ({dt:.0f}s, {usage.get('total_tokens', 0)} tok)", reply)
-        print(f"--- turn {turn}/{max_turns} ({dt:.0f}s, {usage.get('total_tokens', 0)} tok) ---")
+        limit = max_turns if max_turns is not None else "∞"
+        print(f"--- turn {turn}/{limit} ({dt:.0f}s, {usage.get('total_tokens', 0)} tok) ---")
 
         action, err = parse_action(reply)
         if err:
@@ -141,10 +144,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", default=None, help="单任务模式：本次会话任务")
     ap.add_argument("--goal", default=None, help="目标驱动模式：总目标（多会话循环）")
-    ap.add_argument("--max-turns", type=int, default=CFG["max_turns"])
-    ap.add_argument("--max-sessions", type=int, default=10, help="goal 模式最多会话数")
+    ap.add_argument("--max-turns", type=int, default=None,
+                    help="单段会话 LLM 交互轮数上限；默认不设限（一轮 iter 跑到底）")
+    ap.add_argument("--max-sessions", type=int, default=40,
+                    help="goal 模式最多迭代多少个 iter（默认 40）")
     ap.add_argument("--token-budget", type=int, default=None,
-                    help="goal 模式 token 总预算（达到即停）")
+                    help="goal 模式 token 总预算（达到即停，默认不限）")
     ap.add_argument("--target-rank", type=int, default=2)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--mock", action="store_true")
@@ -216,10 +221,11 @@ def main():
                 print(f"[goal] 已达成 Top-{args.target_rank}（status.json 全 achieved），停止")
                 break
             task = (f"总目标：{args.goal}。当前是第 {si} 段会话。"
-                    "先读 research_log.md 与各 iter 状态，选出当下价值最高的一步"
-                    "（立项新 iter / 实现代码 / 编译 / 跑实验 / 统计汇总 / 记录结论），"
-                    "把它实质推进：能跑完实验就跑完并回填文档；"
-                    "一次会话聚焦一步，收尾时 finish 并写清进展与下一步。")
+                    "本段会话 = 一个 iter 的完整落地：先读 research_log.md 与各 iter 状态，"
+                    "选定一个 iter（新立项或继续未完成的），在本段会话内完成它——"
+                    "IDEA/代码/冒烟/正式实验/统计汇总/RESULTS 回填/research_log 记录/"
+                    "sync_github 同步，全部做完才 finish。"
+                    "不设交互轮数上限，不要中途草草收尾。")
             sess = sess_dir / f"{stamp}_s{si}.md"
             print(f"\n===== [goal] 会话 {si}/{args.max_sessions}  累计 token={used_tokens} =====")
             log_session(sess, "system", f"GOAL: {args.goal}\nTASK: {task}")

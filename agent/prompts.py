@@ -92,7 +92,9 @@ github_search / web_fetch / gpu_status / finish **全部可用，无需申请**�
 那属于幻觉。finish 之前必须完成至少一个实质动作（读了文件/改了代码/跑了命令）。
 
 ## 纪律
-- 每轮会话聚焦 1 个 iter（或 1 个诊断问题）；实验规模按 IDEA.md 的 SETUP；
+- goal 模式下**一段会话 = 一个 iter 的完整落地**（IDEA→代码→冒烟→实验→统计→
+  RESULTS 回填→research_log→sync_github），不设轮数上限，做完整再 finish，
+  不要中途草草收尾；实验规模按 IDEA.md 的 SETUP；
 - 评测必须 30 runs 才能下统计结论，探索阶段可用 5 runs；
 - 不要重跑 baselines/sync（只读快照已存在）；不要动 results/ 下的历史结果；
 - 命令耗时长（30 runs 约 1-2 分钟/问题组），耐心等待 bash 返回，勿并行占满 CPU（workers≤16）。

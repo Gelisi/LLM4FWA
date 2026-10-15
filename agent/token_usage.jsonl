@@ -34,3 +34,6 @@
 {"ts": "2026-10-15T15:40:37", "mode": "goal", "session": 2, "task": "按 RESEARCH_PLAN 与 AGENT_GUIDE 持续推进研究循环：优先完成 iter_001（RL 重启控制）的立项-实现-冒烟-正式实验-结论回填，然后按计划继续后续 iter。每个 iter 收尾务必 sync_github 并更新 research_log", "turn": 1, "prompt_tokens": 2377, "completion_tokens": 164, "total_tokens": 2541}
 {"ts": "2026-10-15T15:40:42", "mode": "goal", "session": 2, "task": "按 RESEARCH_PLAN 与 AGENT_GUIDE 持续推进研究循环：优先完成 iter_001（RL 重启控制）的立项-实现-冒烟-正式实验-结论回填，然后按计划继续后续 iter。每个 iter 收尾务必 sync_github 并更新 research_log", "turn": 2, "prompt_tokens": 3003, "completion_tokens": 186, "total_tokens": 3189}
 {"ts": "2026-10-15T15:40:47", "mode": "goal", "session": 2, "task": "按 RESEARCH_PLAN 与 AGENT_GUIDE 持续推进研究循环：优先完成 iter_001（RL 重启控制）的立项-实现-冒烟-正式实验-结论回填，然后按计划继续后续 iter。每个 iter 收尾务必 sync_github 并更新 research_log", "turn": 3, "prompt_tokens": 3365, "completion_tokens": 85, "total_tokens": 3450}
+{"ts": "2026-10-15T16:14:54", "mode": "mock", "session": 0, "task": "mock", "turn": 1, "prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+{"ts": "2026-10-15T16:14:55", "mode": "mock", "session": 0, "task": "mock", "turn": 2, "prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+{"ts": "2026-10-15T16:14:55", "mode": "mock", "session": 0, "task": "mock", "turn": 3, "prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
