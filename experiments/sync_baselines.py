@@ -22,7 +22,9 @@ from pathlib import Path
 
 import numpy as np
 
-REF_RESULTS = Path("/mnt/new_gemini/shipengcen/reference_algorithms/experiment_results")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from fwarl.paths import REF_RESULTS  # noqa: E402
+
 OUT_DIR = Path(__file__).resolve().parent.parent / "baselines"
 WORKERS = 16
 

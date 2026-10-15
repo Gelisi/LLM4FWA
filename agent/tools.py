@@ -15,7 +15,7 @@ from xml.etree import ElementTree
 
 from . import net
 
-ROOT = Path("/mnt/new_gemini/shipengcen/autoresearch")
+ROOT = Path(__file__).resolve().parents[1]  # 仓库根目录（随仓库迁移）
 
 _UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) autoresearch-agent/1.0"}
 _PRIVATE_RE = re.compile(

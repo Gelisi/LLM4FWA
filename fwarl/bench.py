@@ -7,7 +7,6 @@
 """
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -15,10 +14,11 @@ from typing import Callable, Optional
 
 import numpy as np
 
-# reference_algorithms 路径（勿改动，.so 依赖其相对目录结构）
-REF_DIR = Path("/mnt/new_gemini/shipengcen/reference_algorithms")
-if str(REF_DIR) not in sys.path:
-    sys.path.insert(0, str(REF_DIR))
+from .paths import REF_DIR, ensure_syspath
+
+# reference_algorithms 路径（默认与本仓库同级，可用 FWARL_REF_DIR 覆盖；
+# .so 依赖其目录结构，整体拷贝即可）
+ensure_syspath()
 
 from cec_benchmark import (  # noqa: E402
     CEC2013,

@@ -22,7 +22,10 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, "/mnt/new_gemini/shipengcen/MPOPT")
+
+from fwarl.paths import MPOPT_DIR, ensure_syspath  # noqa: E402
+
+ensure_syspath()
 
 from mpopt.algorithms.TFWA import TFWA  # noqa: E402
 from fwarl.bench import get_problem  # noqa: E402

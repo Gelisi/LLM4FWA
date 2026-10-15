@@ -9,14 +9,11 @@
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import numpy as np
 
-MPOPT_DIR = Path("/mnt/new_gemini/shipengcen/MPOPT")
-if str(MPOPT_DIR) not in sys.path:
-    sys.path.insert(0, str(MPOPT_DIR))
+from .paths import MPOPT_DIR, ensure_syspath
+
+ensure_syspath()
 
 from mpopt.tools.objective import Evaluator, ObjFunction  # noqa: E402
 from mpopt.algorithms.TFWA import TFWA as _MPOPT_TFWA  # noqa: E402

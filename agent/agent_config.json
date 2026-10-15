@@ -56,7 +56,7 @@
     "ssh ",
     "scp "
   ],
-  "workspace_root": "/mnt/new_gemini/shipengcen/autoresearch",
+  "workspace_root": null,
   "session_log_dir": "agent/sessions",
   "token_ledger": "agent/token_usage.jsonl"
 }
