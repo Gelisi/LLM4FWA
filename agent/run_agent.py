@@ -200,7 +200,10 @@ def main():
     net.configure(load_env())
     mode = net.network_mode()
     proxy = net.proxy_for_url(net.settings().get("AGENT_BASE_URL", ""), mode)
-    print(f"[net] 模式={mode}；API 实际路由={'代理' if proxy else '直连'}", flush=True)
+    if mode == "auto":
+        print(f"[net] 模式=auto；API 优先直连；备用代理={'已配置' if proxy else '未配置'}", flush=True)
+    else:
+        print(f"[net] 模式={mode}；API 实际路由={'代理' if proxy else '直连'}", flush=True)
     system = build_system_prompt(args.target_rank)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     sess_dir = ROOT / CFG["session_log_dir"]

@@ -1,4 +1,4 @@
-"""统一 HTTP 层：auto 遵循标准代理变量；direct/proxy 显式指定路由。
+"""统一 HTTP 层：auto 直连优先、网络失败后代理；direct/proxy 强制指定路由。
 
 代理与路由读取 agent/.env 或当前客户端配置，环境变量优先；
 连接超时和响应等待分开，等待期间输出不包含密钥的进度。
@@ -157,7 +157,7 @@ def request(method: str, url: str, **kw):
     proxy = proxy_for_url(url, mode)
     if mode == "proxy" and not proxy:
         raise ValueError("proxy 模式没有当前协议的代理，请配置 https_proxy/http_proxy/all_proxy 或 AGENT_PROXY")
-    attempts = [bool(proxy)]
+    attempts = [True] if mode == "proxy" else ([False, True] if mode == "auto" and proxy else [False])
     last_exc = None
     for use_proxy in attempts:
         label = f"{'代理' if use_proxy else '直连'} {method} {urlsplit(url).hostname}"
@@ -169,9 +169,11 @@ def request(method: str, url: str, **kw):
                 r = s.request(method, url, proxies=proxy if use_proxy else {}, **kw)
             print(f"[net] {label} 返回 HTTP {r.status_code}，耗时 {time.monotonic() - started:.1f}s", flush=True)
             return r
-        except requests.RequestException as e:
+        except (requests.ConnectionError, requests.Timeout) as e:
             last_exc = e
             print(f"[net] {label} 失败：{error_summary(e)}，耗时 {time.monotonic() - started:.1f}s", flush=True)
+            if not use_proxy and mode == "auto" and proxy:
+                print("[net] 直连网络异常，尝试备用代理", flush=True)
     raise last_exc
 
 

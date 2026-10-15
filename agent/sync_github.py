@@ -41,6 +41,25 @@ def git(args: list, check=True) -> subprocess.CompletedProcess:
     return r
 
 
+def git_network(args, mode, direct_env, proxy_env, timeout=120):
+    routes = [("代理", proxy_env)] if mode == "proxy" else [("直连", direct_env)]
+    if mode == "auto" and proxy_env is not None:
+        routes.append(("代理", proxy_env))
+    network_errors = ("could not resolve", "failed to connect", "timed out", "connection reset",
+                      "connection refused", "recv failure", "send failure", "empty reply from server",
+                      "ssl_connect", "ssl connection")
+    for label, env in routes:
+        print(f"[git net] {args[0]} 使用{label}", flush=True)
+        try:
+            result = subprocess.run(["git"] + args, cwd=str(ROOT), env=env,
+                                    capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            result = subprocess.CompletedProcess(["git"] + args, 124, "", "Network command timed out")
+        if result.returncode == 0 or not any(error in result.stderr.lower() for error in network_errors):
+            return result, label
+    return result, label
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--message", required=True)
@@ -51,8 +70,9 @@ def main():
     values = load_env()
     from agent import net
     net.configure(values)
-    proxies = net.proxy_for_url(REMOTE)
-    if net.network_mode() == "proxy" and not proxies:
+    mode = net.network_mode()
+    proxies = net.proxy_for_url(REMOTE, mode)
+    if mode == "proxy" and not proxies:
         print("proxy 模式没有 GitHub HTTPS 代理，请配置 https_proxy/all_proxy 或 AGENT_PROXY")
         return 1
     env = {f"{key}_proxy": value for key, value in (proxies or {}).items() if key != "no_proxy"}
@@ -61,7 +81,9 @@ def main():
     network_env = {key: value for key, value in os.environ.items()
                    if key.lower() not in ("http_proxy", "https_proxy", "all_proxy", "no_proxy",
                                           "http_proxy_lower", "https_proxy_lower")}
+    direct_env = dict(network_env)
     network_env.update(env)
+    proxy_env = network_env if proxies else None
 
     if not (ROOT / ".git").exists():
         git(["init", "-b", "main"])
@@ -74,9 +96,7 @@ def main():
     # 远端已有内容时首次同步：合并保留远端文件
     r = git(["rev-parse", "--verify", "origin/main"], check=False)
     if r.returncode != 0:
-        fetch = subprocess.run(["git", "fetch", "origin", "main"], cwd=str(ROOT),
-                               capture_output=True, text=True,
-                               env=network_env)
+        fetch, _ = git_network(["fetch", "origin", "main"], mode, direct_env, proxy_env)
         if fetch.returncode != 0:
             print(f"fetch 失败（无凭证或网络）: {fetch.stderr.strip()[:200]}")
         else:
@@ -86,8 +106,7 @@ def main():
                   else f"合并失败: {m.stderr.strip()[:200]}")
 
     ahead = False
-    fetch = subprocess.run(["git", "fetch", "origin", "main"], cwd=str(ROOT),
-                           capture_output=True, text=True, timeout=120, env=network_env)
+    fetch, _ = git_network(["fetch", "origin", "main"], mode, direct_env, proxy_env)
     if fetch.returncode == 0:
         ab = git(["rev-list", "--left-right", "--count", "origin/main...HEAD"],
                  check=False).stdout.split()
@@ -117,22 +136,16 @@ def main():
         print("（--no-push，跳过推送）")
         return 0
     url = push_url()
-    last = None
-    for label, penv in (("代理" if proxies else "直连", network_env),):
-        push = subprocess.run(["git", "push", url, "main:main"], cwd=str(ROOT),
-                              capture_output=True, text=True, env=penv, timeout=600)
-        if push.returncode == 0:
-            print(f"已推送到 github.com/Gelisi/LLM4FWA (main, {label})")
-            return 0
-        last = push
-        # 认证/权限类错误换网络路径没用，直接停
-        if "403" in push.stderr or "denied" in push.stderr.lower() or \
-                "could not read Username" in push.stderr:
-            break
-    err = (last.stderr if last else "").strip()
+    push, label = git_network(["push", url, "main:main"], mode, direct_env, proxy_env, timeout=600)
+    if push.returncode == 0:
+        print(f"已推送到 github.com/Gelisi/LLM4FWA (main, {label})")
+        return 0
+    err = push.stderr.strip()
     print(f"push 失败: {err[:300]}")
-    if "403" in err or "denied" in err.lower():
-        print("token 已认证但无写权限：请在 GitHub 给该 token 增加对本仓库的写权限\n"
+    if "from proxy after connect" in err.lower() or "tunnel connection failed" in err.lower():
+        print("代理拒绝 HTTPS CONNECT：请核查代理访问许可或认证；尚未连接 GitHub，不能判断 token 权限")
+    elif "403" in err or "denied" in err.lower():
+        print("GitHub 拒绝访问：请检查 token 的仓库权限和分支权限\n"
               "  (classic PAT 勾 repo scope / fine-grained 对本仓库设 Contents: Read and write)")
     elif "could not read Username" in err or "Authentication" in err:
         print("缺少凭证：请在 agent/.env 写入 github-tokens=<PAT>")

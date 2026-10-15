@@ -42,7 +42,10 @@ def main():
         client = get_client(env)
         mode = net.network_mode()
         proxy = net.proxy_for_url(env.get("AGENT_BASE_URL", ""), mode)
-        print(f"网络模式: {mode}；实际路由={'代理' if proxy else '直连'}", flush=True)
+        if mode == "auto":
+            print(f"网络模式: auto；优先直连；备用代理={'已配置' if proxy else '未配置'}", flush=True)
+        else:
+            print(f"网络模式: {mode}；实际路由={'代理' if proxy else '直连'}", flush=True)
         if mode == "proxy" and not proxy:
             raise ValueError("请配置当前协议的 https_proxy/http_proxy/all_proxy 或 AGENT_PROXY")
     except (RuntimeError, ValueError) as e:

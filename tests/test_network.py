@@ -45,19 +45,36 @@ class NetworkTests(unittest.TestCase):
             net.get("https://api.test", timeout=25)
         self.assertEqual(session.request.call_args.kwargs["proxies"], {})
 
-    def test_auto_uses_proxy_without_direct_fallback(self):
-        net.configure({"AGENT_NETWORK_MODE": "auto", "AGENT_PROXY": "http://proxy.test:8080"})
+    def test_auto_direct_success_does_not_use_proxy(self):
+        net.configure({"AGENT_PROXY": "http://proxy.test:8080"})
         session = self.session()
-        session.request.side_effect = requests.exceptions.ProxyError("credentials must not be logged")
-        output = io.StringIO()
-        with patch.object(net.requests, "Session", return_value=session), redirect_stdout(output):
-            with self.assertRaises(requests.exceptions.ProxyError):
-                net.get("https://api.test", timeout=25)
+        with patch.object(net.requests, "Session", return_value=session):
+            net.get("https://api.test", timeout=25)
         self.assertEqual(session.request.call_count, 1)
-        self.assertIn("ProxyError", output.getvalue())
-        self.assertIn("代理 GET", output.getvalue())
-        self.assertNotIn("直连", output.getvalue())
+        self.assertEqual(session.request.call_args.kwargs["proxies"], {})
+
+    def test_auto_uses_proxy_only_after_network_failure(self):
+        net.configure({"AGENT_PROXY": "http://proxy.test:8080"})
+        direct, proxy = self.session(), self.session()
+        direct.request.side_effect = requests.ConnectTimeout("credentials must not be logged")
+        output = io.StringIO()
+        with patch.object(net.requests, "Session", side_effect=[direct, proxy]), redirect_stdout(output):
+            net.get("https://api.test", timeout=25)
+        self.assertEqual(direct.request.call_count, 1)
+        self.assertEqual(proxy.request.call_count, 1)
+        self.assertEqual(direct.request.call_args.kwargs["proxies"], {})
+        self.assertEqual(proxy.request.call_args.kwargs["proxies"]["https"], "http://proxy.test:8080")
+        self.assertIn("尝试备用代理", output.getvalue())
         self.assertNotIn("credentials", output.getvalue())
+
+    def test_http_status_does_not_trigger_proxy_fallback(self):
+        net.configure({"AGENT_PROXY": "http://proxy.test:8080"})
+        for status in (401, 403, 429, 500):
+            session = self.session()
+            self.response.status_code = status
+            with patch.object(net.requests, "Session", return_value=session):
+                self.assertEqual(net.get("https://api.test").status_code, status)
+            self.assertEqual(session.request.call_count, 1)
 
     def test_proxy_mode_requires_address(self):
         net.configure({"AGENT_NETWORK_MODE": "proxy"})
@@ -97,9 +114,11 @@ class NetworkTests(unittest.TestCase):
         net.configure({"http_proxy": proxy, "https_proxy": "$http_proxy", "all_proxy": "$http_proxy"})
         self.assertEqual(net.resolve_proxy(), {"http": proxy, "https": proxy, "all": proxy})
         session = self.session()
+        session.request.side_effect = [requests.ConnectTimeout(), self.response]
         with patch.object(net.requests, "Session", return_value=session):
             net.post("https://n.codexapi.cc/v1/chat/completions", timeout=25)
-        self.assertEqual(session.request.call_count, 1)
+        self.assertEqual(session.request.call_count, 2)
+        self.assertEqual(session.request.call_args_list[0].kwargs["proxies"], {})
         self.assertEqual(session.request.call_args.kwargs["proxies"]["https"], proxy)
 
     def test_exported_standard_fields_take_effect(self):
@@ -147,7 +166,8 @@ class NetworkTests(unittest.TestCase):
         from agent import sync_github
         from types import SimpleNamespace
         proxy = "http://hk-mmhttpproxy.woa.com:11113"
-        vals = {"http_proxy": proxy, "https_proxy": "$http_proxy", "all_proxy": "$http_proxy"}
+        vals = {"AGENT_NETWORK_MODE": "proxy", "http_proxy": proxy,
+                "https_proxy": "$http_proxy", "all_proxy": "$http_proxy"}
 
         def fake_git(args, **kwargs):
             output = "origin\n" if args == ["remote"] else ("0 1" if args[0] == "rev-list" else "")
@@ -162,6 +182,50 @@ class NetworkTests(unittest.TestCase):
         for call in run.call_args_list:
             self.assertEqual(call.kwargs["env"]["https_proxy"], proxy)
             self.assertEqual(call.kwargs["env"]["all_proxy"], proxy)
+
+    def test_github_proxy_connect_denial_is_not_token_error(self):
+        from agent import sync_github
+        from types import SimpleNamespace
+        vals = {"AGENT_NETWORK_MODE": "proxy", "https_proxy": "http://hk-mmhttpproxy.woa.com:11113"}
+        fetch = SimpleNamespace(returncode=0, stdout="", stderr="")
+        push = SimpleNamespace(returncode=1, stdout="", stderr="Received HTTP code 403 from proxy after CONNECT")
+
+        def fake_git(args, **kwargs):
+            return SimpleNamespace(returncode=0, stdout="origin\n" if args == ["remote"] else "0 1", stderr="")
+
+        output = io.StringIO()
+        with patch("sys.argv", ["sync_github.py", "--message", "test"]), \
+                patch.object(sync_github, "load_env", return_value=vals), \
+                patch.object(sync_github, "git", side_effect=fake_git), \
+                patch.object(sync_github.subprocess, "run", side_effect=[fetch, push]), redirect_stdout(output):
+            self.assertEqual(sync_github.main(), 1)
+        self.assertIn("代理拒绝 HTTPS CONNECT", output.getvalue())
+        self.assertNotIn("token 已认证", output.getvalue())
+
+    def test_github_auto_proxy_is_used_only_for_network_failure(self):
+        from agent import sync_github
+        from types import SimpleNamespace
+        success = SimpleNamespace(returncode=0, stdout="", stderr="")
+        cases = ((success, False),
+                 (SimpleNamespace(returncode=128, stdout="", stderr="Failed to connect to github.com"), True),
+                 (SimpleNamespace(returncode=128, stdout="", stderr="HTTP 403 permission denied"), False))
+        direct_env, proxy_env = {}, {"https_proxy": "http://proxy.test:8080"}
+        for first, needs_proxy in cases:
+            replies = [first, success] if needs_proxy else [first]
+            with patch.object(sync_github.subprocess, "run", side_effect=replies) as run:
+                result, label = sync_github.git_network(["fetch", "origin", "main"], "auto", direct_env, proxy_env)
+            self.assertEqual(run.call_args_list[0].kwargs["env"], direct_env)
+            self.assertEqual(run.call_count, 2 if needs_proxy else 1)
+            self.assertEqual(label, "代理" if needs_proxy else "直连")
+
+    def test_read_timeout_also_triggers_auto_proxy_fallback(self):
+        net.configure({"https_proxy": "http://proxy.test:8080"})
+        session = self.session()
+        session.request.side_effect = [requests.ReadTimeout(), self.response]
+        with patch.object(net.requests, "Session", return_value=session):
+            net.get("https://api.test")
+        self.assertEqual(session.request.call_count, 2)
+        self.assertEqual(session.request.call_args.kwargs["proxies"]["https"], "http://proxy.test:8080")
 
     def test_selfcheck_passes_short_timeout_and_mode(self):
         env = {"AGENT_LLM_KIND": "openai", "AGENT_BASE_URL": "https://api.test/v1", "AGENT_MODEL": "test"}
